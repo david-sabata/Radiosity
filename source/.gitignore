@@ -1,0 +1,10 @@
+Debug/
+ipch/
+glew32.dll
+*.sdf
+*.sln
+*.vcxproj
+*.filters
+*.user
+*.opensdf
+*.suo
