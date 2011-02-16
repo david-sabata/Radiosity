@@ -70,8 +70,8 @@ bool wireframe = false;
 
 // funkcni deklarace
 int getColorRange();
-float* getColors();
-
+float* getUniqueColors();
+float* getIndicesColors();
 
 typedef struct { 
 	int from, to; 
@@ -220,73 +220,16 @@ bool InitGLObjects() {
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, scene.getIndicesCount() * sizeof(int), scene.getIndices(), GL_STATIC_DRAW);		
 	
 
-	// VBO pro ulozeni barev - bude obsahovat cely rozsah barev
+	// VBO pro ulozeni barev - bude obsahovat jeden interval barev; barva se sklada ze tri floatu
 	glGenBuffers(1, &n_color_buffer_object);	
 	glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);	
 	
-	float* colorData = getColors(); // colorRange * 3 (barvy) floatu
-	int colorRange = getColorRange();	
-	int indicesCount = scene.getIndicesCount();
+	float* colorData = getIndicesColors(); // colorRange * 3 (barvy) floaty * 4 indexy
+	int colorRange = getColorRange();		
 
-	// barvy v bufferu pouze jedenkrat - nestacilo by?
-	//glBufferData(GL_ARRAY_BUFFER, getColorRange() * 12 * sizeof(float), colorData, GL_STATIC_DRAW);
-		
-	// buffer barev pro vsechny indexy
-	float* indexColors = new float[ indicesCount * 3 ];
-
-	int offset = 0;	// offset v indexColors na kterem je prvni hodnota prave ukladane barvy
-	int colorOffset = 0; // offset v colorData na kterem je prvni hodnota aktualni barvy
-	
-	/*
-	// naplni buffer barvami pro vsechny indexy (3 floaty pro 1 index)
-	while (offset < indicesCount * 3) {
-		float r = colorData[ colorOffset * 3 ];
-		float g = colorData[ colorOffset * 3 + 1 ];
-		float b = colorData[ colorOffset * 3 + 2 ];
-			
-		// vzdy 4 indexy v rade za sebou budou mit stejnou barvu
-		for (int v = 0; v < 4; v++) {					
-			indexColors[ offset ] = r;
-			indexColors[ offset + 1] = g;
-			indexColors[ offset + 2] = b;
-			offset += 3;
-		}
-		offset+=3;
-
-		colorOffset = (colorOffset + 1) % colorRange;	
-	}
-	*/
-
-	while (offset < indicesCount * 3) {
-		float r = colorData[ colorOffset * 3 ];
-		float g = colorData[ colorOffset * 3 + 1 ];
-		float b = colorData[ colorOffset * 3 + 2 ];
-			
-		// vzdy 6 indexu v rade za sebou (tj. dva trojuhelniky, tj. jeden patch) budou mit stejnou barvu
-		for (int v = 0; v < 6; v++) {					
-			indexColors[ offset ] = r;
-			indexColors[ offset + 1] = g;
-			indexColors[ offset + 2] = b;
-			offset += 3;
-		}
-
-		colorOffset = (colorOffset + 1) % colorRange;	
-	}
-	
-
-	if (0) {
-		cout << "-------------------" << endl;
-		for (int i = 0; i < indicesCount * 3; i++) {
-			cout << indexColors[i] << "\t";
-			if (i % 3 == 2)
-				cout << endl;
-		}
-	}
-	
-	glBufferData(GL_ARRAY_BUFFER, indicesCount * 3 * sizeof(float), indexColors, GL_STATIC_DRAW);	
+	glBufferData(GL_ARRAY_BUFFER, colorRange * 3 * 4 * sizeof(float), colorData, GL_STATIC_DRAW);
 	
 	// data jsou uz zkopirovana ve VBO	
-	delete[] indexColors;
 	delete[] colorData; 	
 
 
@@ -396,7 +339,7 @@ bool InitGLObjects() {
 		"    frag_color = mix(fire_color, box_color, box_color.a);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
 		*/
 		"}\n";
-	// zdrojove kody pro vertex / fragment shader (OpenGL 3 uz nepouziva specifikator 'verying', jinak je kod stejny)
+	// zdrojove kody pro vertex / fragment shader (OpenGL 3 uz nepouziva specifikator 'varying', jinak je kod stejny)
 
 
 	// zkompiluje vertex / fragment shader, pripoji je k programu
@@ -713,7 +656,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 				// e
 				if (n_w_param == 0x45) {
 					printf("barevny rozsah: %i\n", getColorRange());
-					float* colors = getColors();
+					float* colors = getUniqueColors();
 					for (int i = 0; i < getColorRange() * 9; i++) {
 						printf("%f ", colors[i]);
 						if (i % 3 == 2)
@@ -898,41 +841,6 @@ void OnIdle(CGL30Driver &driver)
 
 
 /**
- * Vraci pole floatu kde kazde tri hodnoty reprezentuji jednu barvu
- * Pocet barev odpovida getColorRange(), hodnot je colorRange * 3 (barvy)
- */
-float* getColors() {	
-	int range = getColorRange();
-	float* colors = new float[range * 3]; // rgb = 3 hodnoty
-
-	//printf("color range: %i\n", range);
-
-	int i = 0;
-	for (float r = 0.0f; r <= 1.0f; r += 0.5f) {
-		for (float g = 0.0f; g <= 1.0f; g += 0.5f) {
-			for (float b = 0.0f; b <= 1.0f; b += 0.5f) {
-				if (r != 0.0f || g != 0.0f || b != 0.0f) {																			
-					colors[i] = r;
-					colors[i+1] = g;
-					colors[i+2] = b;
-					i += 3;										
-				}
-			}
-		}
-	}	
-
-	/*
-	for (int i = 0; i < range * 3; i++) {
-		cout << colors[i] << " ";
-		if (i % 3 == 2)
-			cout << endl;
-	}
-	*/
-
-	return colors;
-}
-
-/**
  * Vraci pocet unikatnich barev snizeny o jednicku (cernou nepocitame), ktery lze zobrazit
  */
 int getColorRange() {	
@@ -955,3 +863,55 @@ int getColorRange() {
 	return 26;
 }
 
+
+/**
+ * Vraci pole floatu kde kazde tri hodnoty reprezentuji jednu barvu
+ * Pocet barev odpovida getColorRange(), hodnot je colorRange * 3 (barvy)
+ */
+float* getUniqueColors() {	
+	int range = getColorRange();
+	float* colors = new float[range * 3]; // rgb = 3 hodnoty
+
+	int i = 0;
+	for (float r = 0.0f; r <= 1.0f; r += 0.5f) {
+		for (float g = 0.0f; g <= 1.0f; g += 0.5f) {
+			for (float b = 0.0f; b <= 1.0f; b += 0.5f) {
+				if (r != 0.0f || g != 0.0f || b != 0.0f) {																			
+					colors[i] = r;
+					colors[i+1] = g;
+					colors[i+2] = b;
+					i += 3;										
+				}
+			}
+		}
+	}	
+
+	return colors;
+}
+
+/**
+ * Vraci pole floatu, kde kazde tri hodnoty tvori barvu a vzdy
+ * 6 po sobe jdoucich barev je stejnych. Patch se sklada ze dvou
+ * trojuhelniku, tj. 4 (unikatnich) vrcholu, ktere museji mit stejnou barvu
+ */
+float* getIndicesColors() {
+	int indices = 4; // pocet indexu se stejnou barvou
+	int range = getColorRange();
+	float* uniqueColors = getUniqueColors();
+	float* indicesColors = new float[range * 3 * indices];
+	
+	for (int i = 0; i < range * 3; i += 3) { // i = prvni slozka aktualne klonovane barvy
+		
+		for (int j = 0; j < indices; j++) { // j = cislo vrcholu se stejnou barvou
+			int offset = i * indices + j * 3; // prvni slozka vystupni barvy ve vyslednem poli
+			indicesColors[offset    ]     = uniqueColors[i];
+			indicesColors[offset + 1] = uniqueColors[i + 1];
+			indicesColors[offset + 2] = uniqueColors[i + 2];		
+		}
+
+	}
+
+	delete[] uniqueColors;
+
+	return indicesColors;
+}
