@@ -37,8 +37,8 @@ static GLuint n_vertex_buffer_object, n_index_buffer_object, n_vertex_array_obje
 static GLuint n_vertex_shader, n_fragment_shader, n_program_object, n_mvp_matrix_uniform,
 	n_box_sampler_uniform, n_fire_sampler_uniform, n_time_uniform;
 static GLuint n_color_buffer_object;
-static GLuint n_color_array_object;
-//static vector<GLuint>* n_color_array_object = NULL; // pole VAO pro kazdy interval vykreslovanych patchu
+//static GLuint n_color_array_object;
+static GLuint* n_color_array_object = NULL; // pole VAO pro kazdy interval vykreslovanych patchu
 // OpenGL objekty
 
 
@@ -77,6 +77,9 @@ typedef struct {
 	int from, to; 
 } interval;
 
+// intervaly patchu ve VBO po kterych se vykresluje - jen poradova cisla patchu
+// inicializuji se v InitGlObjects
+static vector<interval> patchIntervals; 
 
 
 /**
@@ -231,9 +234,7 @@ bool InitGLObjects() {
 	
 	// data jsou uz zkopirovana ve VBO	
 	delete[] colorData; 	
-
-
-
+		
 	// VAO definuje ktery VBO se preda shaderu a jak se data naskladaji do vstupnich atributu
 	glGenVertexArrays(1, &n_vertex_array_object);
 	glBindVertexArray(n_vertex_array_object);
@@ -243,12 +244,13 @@ bool InitGLObjects() {
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
 	
-		/*
-		// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva ma 3 hodnoty,		
-		glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
-		*/
+		// atribut shaderu se pri kresleni nastavi napevno na cernou barvu
+		if (0) {
+			// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva ma 3 hodnoty,		
+			glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);
+			glEnableVertexAttribArray(1);
+			glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
+		}
 
 		// rekneme OpenGL odkud bude brat indexy geometrie pro glDrawElements (nize)
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, n_index_buffer_object);
@@ -261,30 +263,51 @@ bool InitGLObjects() {
 	// nastaveni VBO. pak pri kresleni volame jen glBindVertexArray() namisto vsech prikazu v bloku vyse
 	glBindVertexArray(0); 
 	
-
 	
-	// druhy VAO bude pro ulozeni barev
-	glGenVertexArrays(1, &n_color_array_object);
-	glBindVertexArray(n_color_array_object);
-	{
+	// rozdelit patche na intervaly: from - prvni patch v intervalu; to - patch za poslednim patchem v intervalu
+	int patchCount = scene.getIndicesCount() / 6;
+	int divided = 0;
+	do {
+		int from = divided;
+		int to = divided + colorRange;
+		if (to > patchCount)
+			to = patchCount;
+
+		interval intv = { from, to };
+		patchIntervals.push_back(intv);
+		divided = to;
+	} while (divided < patchCount);
+
+	// inicializovat pole VAO
+	n_color_array_object = new GLuint[patchIntervals.size()];
+
+	cout << patchIntervals.size() << " intervals" << endl;
+
+	// naplnime pole VAO s odpovidajicimi bindy VBO
+	for (unsigned int i = 0; i < patchIntervals.size(); i++) {
+		cout << "interval " << i << ": " << patchIntervals[i].from << " - " << patchIntervals[i].to << endl;
+
+		glGenVertexArrays(1, &n_color_array_object[i]);
+		glBindVertexArray(n_color_array_object[i]);
+		{		
+			// rekneme OpenGL odkud si ma brat data; kazdy vrchol ma 3 souradnice,		
+			glBindBuffer(GL_ARRAY_BUFFER, n_vertex_buffer_object);
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(3 * 4 * patchIntervals[i].from * sizeof(float)));
+			
+			// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva ma 3 hodnoty,		
+			glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);
+			glEnableVertexAttribArray(1);
+			glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));					
 		
-		// rekneme OpenGL odkud si ma brat data; kazdy vrchol ma 3 souradnice,		
-		glBindBuffer(GL_ARRAY_BUFFER, n_vertex_buffer_object);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));			
+			// rekneme OpenGL odkud bude brat indexy geometrie pro glDrawElements
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, n_index_buffer_object);		
 
-		// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva ma 3 hodnoty,		
-		glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));		
-		
-		// rekneme OpenGL odkud bude brat indexy geometrie pro glDrawElements (nize)
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, n_index_buffer_object);		
+		} // tento blok se "zapamatuje" ve VAO	
 
-	} // tento blok se "zapamatuje" ve VAO	
-
-	// vratit VAO 0
-	glBindVertexArray(0);
+		// vratit VAO 0
+		glBindVertexArray(0);
+	}
 
 	
 
@@ -405,6 +428,9 @@ bool InitGLObjects() {
  */
 void CleanupGLObjects()
 {
+	delete[] n_color_array_object;
+	// smaze dynamicky alokovane pole vao
+
 	glDeleteBuffers(1, &n_vertex_buffer_object);
 	glDeleteBuffers(1, &n_index_buffer_object);
 	// smaze vertex buffer objekty
@@ -422,25 +448,7 @@ void CleanupGLObjects()
 /**
  *	@brief vykresli geometrii sceny (bez specifikace cehokoliv jineho nez geometrie)
  */
-void DrawScene() {
-	
-	// rozdelit patche na intervaly: from - prvni patch v intervalu; to - patch za poslednim patchem v intervalu
-	vector<interval> intervals;
-	int patchCount = scene.getIndicesCount() / 6;
-	int colorRange = getColorRange();
-	int divided = 0;
-
-	do {
-		int from = divided;
-		int to = divided + colorRange;
-		if (to > patchCount)
-			to = patchCount;
-
-		interval intv = { from, to };
-		intervals.push_back(intv);
-		divided = to;
-	} while (divided < patchCount);
-	
+void DrawScene() {	
 	
 	int* indices = scene.getIndices();
 	float* vertices = scene.getVertices();
@@ -448,43 +456,51 @@ void DrawScene() {
 	if (step > 0) { // globalni - pro moznost prepinani
 	
 		// for each interval (   <from; to)   )
-		unsigned int i = step % intervals.size();
+		// jelikoz jsou indexy rozdelene do intervalu, neni potreba pocitat pocatecni offsety, ty uz obsahuje VAO
+		unsigned int i = step % patchIntervals.size();
 		{
 		//for (unsigned int i = 0; i < intervals.size(); i++) {	
-
+			
 			glBindVertexArray(n_vertex_array_object);					
 			glVertexAttrib3f(1, 0.1f, 0.1f, 0.1f); // vse cerne
 			
 			// vykreslit cerne vse pred aktivnim intervalem
 			if (i > 0) {
 				int fromIndex = 0;
-				int count = 6 * intervals[i-1].to; // kreslit indexy od 0 az po posledni pred aktivnim intervalem
+				int count = 6 * patchIntervals[i-1].to; // kreslit indexy od 0 az po posledni pred aktivnim intervalem
 				glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
 			}
-
 			
 			// vykresli cerne vse za aktivnim intervalem
-			if (i < intervals.size()-1) {
-				int fromIndex = 6 * intervals[i+1].from;
-				int count = 6 * (intervals.back().to - intervals[i+1].from);
+			if (i < patchIntervals.size()-1) {
+				int fromIndex = 6 * patchIntervals[i+1].from;
+				int count = 6 * (patchIntervals.back().to - patchIntervals[i+1].from);
 				glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
 			}
-			
+						
 		
 			// vykresli jeden interval s barevnymi patchi
-			glBindVertexArray(n_color_array_object);		
+			glBindVertexArray(n_color_array_object[i]);	
+			//glVertexAttrib3f(1, 1.0f, 1.0f, 1.0f); 
 				
-			// spocitat offset a pocet - vzdy 6 vrcholu
-			int fromIndex = 6 * intervals[i].from;
-			int count = 6 * (intervals[i].to - intervals[i].from);			
+			// spocitat pocet - vzdy 6 indexu; offset neni treba udavat, VAO uz obsahuje VBO na spravnem offsetu
+			int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);
 
-			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));	
+			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));	
 		}
 
 	} else {
-		// vykresli vse barevne (s moznym opakovanim barev)
-		glBindVertexArray(n_color_array_object);								
-		glDrawElements(GL_TRIANGLES, scene.getIndicesCount(), GL_UNSIGNED_INT, p_OffsetInVBO(0));	
+		// vykresli vse barevne (s moznym opakovanim barev)		
+		float* colors = getUniqueColors();
+		
+		for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
+			glBindVertexArray(n_color_array_object[i]);			
+			glVertexAttrib3f(1, colors[3 * i], colors[3 * i + 1], colors[3 * i + 2]);			
+			int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);	
+			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));
+		}
+
+		delete[] colors;
 	}
 
 
