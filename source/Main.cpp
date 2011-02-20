@@ -12,10 +12,7 @@
 #include <vld.h> 
 
 // pro Cornell Box
-// 0.1   =    69 000 vertexu
-// 0.01  =   368 000 vertexu
-// 0.001 = 5 000 000 vertexu
-#define MAX_PATCH_AREA 0.5
+#define MAX_PATCH_AREA 0.1
 
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
@@ -223,6 +220,7 @@ bool InitGLObjects() {
 	glGenBuffers(1, &n_color_buffer_object);	
 	glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);	
 	
+	Colors::setNeededColors(scene.getIndicesCount() / 4); // idealni rozsah barev
 	float* colorData = Colors::getIndicesColors(); // colorRange * 3 (barvy) floaty * 4 indexy
 	unsigned long colorRange = Colors::getColorRange();		
 	glBufferData(GL_ARRAY_BUFFER, colorRange * 3 * 4 * sizeof(float), colorData, GL_STATIC_DRAW);

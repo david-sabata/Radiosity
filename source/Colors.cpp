@@ -3,82 +3,88 @@
 
 
 /**
- * Trojice funkci vracejici bitove rozsahy pro ulozeni barev v bufferech
- * Inline v cpp => nelze pouzivat zvenci
- */
-inline int getRedBits() {
-#ifdef LIMIT_INTERNAL_COLORS
-	return 2;
-#endif
-#ifndef LIMIT_INTERNAL_COLORS
-	return 8;
-#endif
-}
-inline int getGreenBits() {
-#ifdef LIMIT_INTERNAL_COLORS
-	return 2;
-#endif
-#ifndef LIMIT_INTERNAL_COLORS
-	return 8;
-#endif
-}
-inline int getBlueBits() {
-#ifdef LIMIT_INTERNAL_COLORS
-	return 2;
-#endif
-#ifndef LIMIT_INTERNAL_COLORS
-	return 8;
-#endif
-}
-
-
-/**
  * Vychozi hodnoty kroku
  */
-float Colors::step_r = 0.0f;
-float Colors::step_g = 0.0f;
-float Colors::step_b = 0.0f;
+float Colors::step[3] = { 0.0f, 0.0f, 0.0f };
 
 /**
- * Vraci nejmensi rozlisitelny krok v barve, v zavislosti na hloubce bufferu
+ * Vychozi hodnoty bitovych rozsahu
  */
-float Colors::getStepRed() {
-	if (step_r > 0.0)
-		return step_r;
+#ifndef LIMIT_INTERNAL_COLORS
+unsigned int Colors::bits[3] = { 8, 8, 8 };
+#else
+unsigned int Colors::bits[3] = { 1, 1, 1 };
+#endif
 
-	step_r = float(1 / pow(2.0, getRedBits()));
-	if (step_r == numeric_limits<float>::infinity())
-		step_r = 0.000001f;
+/**
+ * Pozadovany pocet unikatnich barev
+ * Pokud je rozsah vyssi, dynamicky se snizi
+ */
+unsigned long Colors::neededColors = 0;
 
-	return step_r;
+
+/**
+ * Nastavi pozadovany pocet unikatnich barev. Pouze pro optimalizaci.
+ * Pokud je rozsah vyssi nez potrebny pocet barev, zkusi se rozsah snizit.
+ * Kdyby rozsah byl nizsi, generator sceny jej pouzije vicekrat
+ */
+void Colors::setNeededColors(unsigned long colors) {
+	neededColors = colors;
 }
 
+
 /**
- * Vraci nejmensi rozlisitelny krok v barve, v zavislosti na hloubce bufferu
+ * Snizi bitovy rozsah jedne barvy (te s nejvyssim rozsahem) o jeden bit,
+ * cimz snizi celkovy rozsah unikatnich barev na polovinu.
+ * Vraci bool podle toho, jestli probehlo snizeni rozsahu nektere barvy
  */
-float Colors::getStepGreen() {
-	if (step_g > 0.0)
-		return step_g;
+bool Colors::decreaseBits() {
+	unsigned int m = max(bits[RED], max(bits[GREEN], bits[BLUE]));
+	if (m == 1)
+		return false; // nechceme se dostat na rozsah 0 bitu
 
-	step_g = float(1 / pow(2.0, getGreenBits()));
-	if (step_g == numeric_limits<float>::infinity())
-		step_g = 0.000001f;
+	// vynuti pregenerovani kroku, a tim i rozsahu
+	step[0] = step[1] = step[2] = 0;
 
-	return step_g;
+	if (m == bits[RED]) {
+		bits[RED]--;
+		return true;
+	} else if (m == bits[GREEN]) {
+		bits[GREEN]--;
+		return true;
+	} else {
+		bits[BLUE]--;
+		return true;
+	}
 }
 
+
+/**
+ * Vraci bitovy rozsah bufferu pro pozadovanou barvu.
+ * Pripadne dynamicky snizeny podle neededColors
+ */
+unsigned int Colors::getBits(unsigned int color) {
+	if (bits[color] == 0) {
+		// volat OpenGL funkci pro zjisteni poctu bitu barvy v bufferu
+		return 1;
+	} else
+		return bits[color];
+}
+
+
+
 /**
  * Vraci nejmensi rozlisitelny krok v barve, v zavislosti na hloubce bufferu
  */
-float Colors::getStepBlue() {
-	if (step_b > 0.0)
-		return step_b;
+float Colors::getStep(unsigned int color) {
+	if (step[color] > 0.0)
+		return step[color];
 
-	step_b = float(1 / pow(2.0, getBlueBits()));
-	if (step_b == numeric_limits<float>::infinity())
-		step_b = 0.000001f;
+	step[color] = float(1 / pow(2.0, int(getBits(color)) ));
+	if (step[color] == numeric_limits<float>::infinity())
+		step[color] = 0.000001f;
 
-	return step_b;
+	return step[color];
 }
 
 
@@ -87,10 +93,18 @@ float Colors::getStepBlue() {
  * Vraci pocet unikatnich barev snizeny o jednicku (cernou nepocitame), ktery lze zobrazit
  */
 unsigned long Colors::getColorRange() {	
-	long r = long(1 / getStepRed()) + 1; // +1 reprezentuje hodnotu barvy "0"
-	long g = long(1 / getStepGreen()) + 1;
-	long b = long(1 / getStepBlue()) + 1;
-	return r * g * b - 1;
+	long r = long(1 / getStep(RED)) + 1; // +1 reprezentuje hodnotu barvy "0"
+	long g = long(1 / getStep(GREEN)) + 1;
+	long b = long(1 / getStep(BLUE)) + 1;
+	
+	unsigned long range = r * g * b - 1;
+	// pokud je aktualni rozsah vice nez dvojnasobek pozadovaneho, muzeme jej snizit
+	if (neededColors > 0 && range > neededColors * 2) {
+		if (decreaseBits())
+			return getColorRange();
+	}
+
+	return range;
 }
 
 
@@ -102,11 +116,11 @@ float* Colors::getUniqueColors() {
 	unsigned long range = getColorRange();
 	float* colors = new float[range * 3]; // rgb = 3 hodnoty	
 	
-	// predchozi volani getColorRange zarucuje, ze step_x uz budou naplnene
+	// predchozi volani getColorRange zarucuje, ze step[] uz budou naplnene
 	int i = 0;
-	for (float r = 0; r <= 1.0f; r += step_r) {
-		for (float g = 0; g <= 1.0f; g += step_g) {
-			for (float b = 0; b <= 1.0f; b += step_b) {	
+	for (float r = 0; r <= 1.0f; r += step[RED]) {
+		for (float g = 0; g <= 1.0f; g += step[GREEN]) {
+			for (float b = 0; b <= 1.0f; b += step[BLUE]) {	
 				if (r > 0 || g > 0 || b > 0) {
 					colors[i] = r;
 					colors[i+1] = g;
@@ -116,23 +130,7 @@ float* Colors::getUniqueColors() {
 			}
 		}
 	}
-
-	/*
-	int i = 0;
-	for (float r = 0.0f; r <= 1.0f; r += 0.5f) {
-		for (float g = 0.0f; g <= 1.0f; g += 0.5f) {
-			for (float b = 0.0f; b <= 1.0f; b += 0.5f) {
-				if (r != 0.0f || g != 0.0f || b != 0.0f) {																			
-					colors[i] = r;
-					colors[i+1] = g;
-					colors[i+2] = b;
-					i += 3;										
-				}
-			}
-		}
-	}	
-	*/
-
+	
 	return colors;
 }
 

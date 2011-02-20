@@ -5,6 +5,7 @@
 
 #include <limits>
 #include <cmath>
+#include <algorithm>
 
 using namespace std;
 
@@ -12,15 +13,23 @@ using namespace std;
 class Colors {
 
 	private:				
-		static float step_r;
-		static float step_g;
-		static float step_b;
+		static float step[3];	
+		static unsigned int bits[3];
 
-		static float getStepRed();
-		static float getStepGreen();
-		static float getStepBlue();
+		static float getStep(unsigned int color);
+		static unsigned int getBits(unsigned int color);
+
+		static bool decreaseBits();
+		static unsigned long neededColors;
+
+		enum {
+			RED = 0,
+			GREEN,
+			BLUE
+		};
 		
 	public:
+		static void setNeededColors(unsigned long colors);
 		static unsigned long getColorRange();
 		static float* getUniqueColors();
 		static float* getIndicesColors();
