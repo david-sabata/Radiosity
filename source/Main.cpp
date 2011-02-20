@@ -8,6 +8,7 @@
 #include "Tga.h"
 #include "Camera.h"
 #include "ModelContainer.h"
+#include "Colors.h"
 #include <vld.h> 
 
 // pro Cornell Box
@@ -67,12 +68,7 @@ int step = 0;
 // zobrazit pouze wireframe?
 bool wireframe = false;
 
-
-// funkcni deklarace
-int getColorRange();
-float* getUniqueColors();
-float* getIndicesColors();
-
+// polozka intervalu patchu
 typedef struct { 
 	int from, to; 
 } interval;
@@ -227,10 +223,11 @@ bool InitGLObjects() {
 	glGenBuffers(1, &n_color_buffer_object);	
 	glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);	
 	
-	float* colorData = getIndicesColors(); // colorRange * 3 (barvy) floaty * 4 indexy
-	int colorRange = getColorRange();		
-
+	float* colorData = Colors::getIndicesColors(); // colorRange * 3 (barvy) floaty * 4 indexy
+	unsigned long colorRange = Colors::getColorRange();		
 	glBufferData(GL_ARRAY_BUFFER, colorRange * 3 * 4 * sizeof(float), colorData, GL_STATIC_DRAW);
+
+	cout << " unique colors: " << colorRange << endl;
 	
 	// data jsou uz zkopirovana ve VBO	
 	delete[] colorData; 	
@@ -281,11 +278,10 @@ bool InitGLObjects() {
 	// inicializovat pole VAO
 	n_color_array_object = new GLuint[patchIntervals.size()];
 
-	cout << patchIntervals.size() << " intervals" << endl;
+	cout << "     intervals: " << patchIntervals.size()<< endl;
 
 	// naplnime pole VAO s odpovidajicimi bindy VBO
 	for (unsigned int i = 0; i < patchIntervals.size(); i++) {
-		cout << "interval " << i << ": " << patchIntervals[i].from << " - " << patchIntervals[i].to << endl;
 
 		glGenVertexArrays(1, &n_color_array_object[i]);
 		glBindVertexArray(n_color_array_object[i]);
@@ -491,7 +487,7 @@ void DrawScene() {
 
 	} else {
 		// vykresli vse barevne (s moznym opakovanim barev)		
-		float* colors = getUniqueColors();
+		float* colors = Colors::getUniqueColors();
 		
 		for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
 			glBindVertexArray(n_color_array_object[i]);			
@@ -671,14 +667,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 				
 				// e
 				if (n_w_param == 0x45) {
-					printf("barevny rozsah: %i\n", getColorRange());
-					float* colors = getUniqueColors();
-					for (int i = 0; i < getColorRange() * 9; i++) {
-						printf("%f ", colors[i]);
-						if (i % 3 == 2)
-							printf("\n");
-					}
-					delete[] colors;
+					// dump something!
 				}
 
 				// f
@@ -853,81 +842,4 @@ void OnIdle(CGL30Driver &driver)
 	
 	// preklopi buffery, zobrazi co jsme nakreslili
 	driver.Blit(); 
-}
-
-
-/**
- * Vraci pocet unikatnich barev snizeny o jednicku (cernou nepocitame), ktery lze zobrazit
- */
-int getColorRange() {	
-	
-	/* vraci chybu INVALID_ENUM - zrejme deprecated
-		GLint redBits, greenBits, blueBits;
-
-		glGetIntegerv (GL_RED_BITS, &redBits);
-		glGetIntegerv (GL_GREEN_BITS, &greenBits);
-		glGetIntegerv (GL_BLUE_BITS, &blueBits);
-
-		printf("r: %d\n", redBits);
-		printf("g: %d\n", greenBits);
-		printf("b: %d\n", blueBits);			
-	*/	
-	
-	// predpokladat 8b
-
-	// barvy 0.0, 0.5, 1.0	
-	return 26;
-}
-
-
-/**
- * Vraci pole floatu kde kazde tri hodnoty reprezentuji jednu barvu
- * Pocet barev odpovida getColorRange(), hodnot je colorRange * 3 (barvy)
- */
-float* getUniqueColors() {	
-	int range = getColorRange();
-	float* colors = new float[range * 3]; // rgb = 3 hodnoty
-
-	int i = 0;
-	for (float r = 0.0f; r <= 1.0f; r += 0.5f) {
-		for (float g = 0.0f; g <= 1.0f; g += 0.5f) {
-			for (float b = 0.0f; b <= 1.0f; b += 0.5f) {
-				if (r != 0.0f || g != 0.0f || b != 0.0f) {																			
-					colors[i] = r;
-					colors[i+1] = g;
-					colors[i+2] = b;
-					i += 3;										
-				}
-			}
-		}
-	}	
-
-	return colors;
-}
-
-/**
- * Vraci pole floatu, kde kazde tri hodnoty tvori barvu a vzdy
- * 6 po sobe jdoucich barev je stejnych. Patch se sklada ze dvou
- * trojuhelniku, tj. 4 (unikatnich) vrcholu, ktere museji mit stejnou barvu
- */
-float* getIndicesColors() {
-	int indices = 4; // pocet indexu se stejnou barvou
-	int range = getColorRange();
-	float* uniqueColors = getUniqueColors();
-	float* indicesColors = new float[range * 3 * indices];
-	
-	for (int i = 0; i < range * 3; i += 3) { // i = prvni slozka aktualne klonovane barvy
-		
-		for (int j = 0; j < indices; j++) { // j = cislo vrcholu se stejnou barvou
-			int offset = i * indices + j * 3; // prvni slozka vystupni barvy ve vyslednem poli
-			indicesColors[offset    ]     = uniqueColors[i];
-			indicesColors[offset + 1] = uniqueColors[i + 1];
-			indicesColors[offset + 2] = uniqueColors[i + 2];		
-		}
-
-	}
-
-	delete[] uniqueColors;
-
-	return indicesColors;
 }
