@@ -30,7 +30,7 @@ ModelContainer::~ModelContainer(void) {
  */
 void ModelContainer::load() {	
 
-	if (0) {
+	if (1) {
 		Model* room = new PrimitiveModel( PrimitiveModel::ROOM );
 		Model* cube = new PrimitiveModel( PrimitiveModel::CUBE );
 		Model* block = new PrimitiveModel( PrimitiveModel::BLOCK );
@@ -40,7 +40,7 @@ void ModelContainer::load() {
 		addModel(block);
 	}
 
-	if (1) {
+	if (0) {
 		//Model* test = new WaveFrontModel("../models/simple_box.obj");
 		Model* test = new WaveFrontModel("../models/chair.obj");
 		//Model* test = new WaveFrontModel("../models/fleurOptonl.obj");
@@ -77,9 +77,10 @@ void ModelContainer::updateData() {
 	vector<float>* tmpVertices = new vector<float>();
 	vector<int>* tmpIndices = new vector<int>();
 
-	// nove pocty vrcholu a indexu
+	// nove pocty vrcholu, indexu a patchu
 	verticesCount = 0;
 	indicesCount = 0;
+	patchesCount = 0;
 
 	int offset = 0; // pocet jiz vlozenych floatu - pro spravne provazani indexu a vrcholu
 
@@ -87,6 +88,7 @@ void ModelContainer::updateData() {
 		
 		vector<Patch*>* patches = (*it)->getPatches( maxPatchArea );
 		int ptchCnt = patches->size();
+		patchesCount += ptchCnt;
 		verticesCount += ptchCnt * 4 * 3; // ctvercove plosky = 4 vrcholy * 3 souradnice		
 		indicesCount += ptchCnt * 6; // ploska = dva trojuhelniky = 6 indexu
 		
@@ -136,7 +138,8 @@ void ModelContainer::updateData() {
 	}
 
 
-	printf("scene vertices: %i\n scene indices: %i\n", verticesCount, indicesCount);
+	//printf("scene vertices: %i\n scene indices: %i\n", verticesCount/3, indicesCount);
+	printf("scene patches: %i\n", patchesCount);
 	
 
 	delete tmpVertices;
@@ -184,4 +187,33 @@ int ModelContainer::getVerticesCount() {
 		updateData();
 
 	return verticesCount;
+}
+
+
+/**
+ * Vraci pocet patchu ve scene
+ */
+unsigned int ModelContainer::getPatchesCount() {
+	if (needRefresh == true)
+		updateData();
+
+	return patchesCount;
+}
+
+/**
+ * Vraci referenci na i-tou plosku ve scene
+ * Pouziva se zejmena pri vypoctech radiozity a pozicovani kamery
+ */
+Patch& ModelContainer::getPatch(unsigned int i) {
+	unsigned int offset = 0; // cislovani patchu napric modely
+
+	for (vector<Model*>::iterator it = models.begin(); it != models.end(); it++) {		
+		vector<Patch*>* patches = (*it)->getPatches( maxPatchArea );
+		if (offset + patches->size() > i) {
+			Patch* p = patches->at(i - offset);
+			return (*p);
+		}
+		offset += patches->size();
+	}
+
 }

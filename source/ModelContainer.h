@@ -30,7 +30,9 @@ class ModelContainer {
 		int		getVerticesCount();	// vraci delku pole vrcholu
 		int*	getIndices();	// vraci pole vazeb mezi vrcholy
 		int		getIndicesCount();	// vraci delku pole vazeb
-		
+		unsigned int	getPatchesCount(); // vraci pocet patchu ve scene
+		Patch& ModelContainer::getPatch(unsigned int i); // vraci referenci na i-tou plosku ve scene
+
 		double maxPatchArea; // maximalni obsah plosek (pokud je vetsi nez 0, deli se plosky dokud neni plocha mensi)
 
 	protected:
@@ -42,6 +44,6 @@ class ModelContainer {
 		int verticesCount;	// velikost pole vrcholu (pocet hodnot)
 		int* indices;	// pole indexu souvisejicich vrcholu, dynamicky alokovane
 		int indicesCount;	// velikost pole indexu (pocet hodnot)
-
+		unsigned int patchesCount;	// celkovy pocet patchu ve scene
 };
 
