@@ -15,6 +15,42 @@ void Camera::Reset() {
 }
 
 
+void Camera::lookFromPatch(Patch& p, PatchLook dir) {
+	eye = p.getCenter();
+
+	Vector3f normal = p.getNormal(); // vychozi normala - smer pohledu FRONT
+	Vector3f patchUp = p.getUp();	// pomocny UP vektor patche
+
+	// podle smeru pohledu upravit normalu a up vektor
+	switch (dir) {
+		case PATCH_LOOK_FRONT:
+			target = normal;
+			up = patchUp;
+			break;
+
+		case PATCH_LOOK_UP:
+			target = patchUp;
+			up = -normal;
+			break;
+
+		case PATCH_LOOK_DOWN:
+			target = -patchUp;
+			up = normal;
+			break;
+
+		case PATCH_LOOK_LEFT:
+			target = -normal.v_Cross(patchUp);
+			up = patchUp;
+			break;
+
+		case PATCH_LOOK_RIGHT:
+			target = normal.v_Cross(patchUp);
+			up = patchUp;
+			break;
+	}
+}
+
+
 void Camera::Move(float x, float y, float z) {
 	
 	// posunout o z-nasobek smeru pohledu
@@ -69,6 +105,6 @@ Matrix4f Camera::GetMatrix() {
 void Camera::DebugDump() {
 	printf("----------------------------------------------------\n");
 	printf("pos %f %f %f\n", eye.x, eye.y, eye.z);
-	printf("vertical %f°  horizontal %f°\n", angle_vert, angle_horiz);
+	printf("target %f %f %f\n", target.x, target.y, target.z);
 	printf("up  %f %f %f\n", up.x, up.y, up.z);
 }
