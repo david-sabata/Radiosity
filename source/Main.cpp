@@ -1,6 +1,7 @@
 #include <GL/glew.h>
 #include <string.h>
 #include <stdio.h>
+#include <iomanip>
 #include <time.h>
 #include <vector>
 #include "OpenGL30Drv.h"
@@ -11,8 +12,8 @@
 #include "Colors.h"
 #include <vld.h> 
 
-// pro Cornell Box
-#define MAX_PATCH_AREA 0.1
+// parametr pro subdivision
+#define MAX_PATCH_AREA 0
 
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
@@ -53,14 +54,17 @@ static bool b_mouse_controlled = false;
 #define KEY_S 0x53
 #define KEY_W 0x57
 
-// objekt kamery
-Camera cam;
+// objekty kamery
+Camera cam; // uzivatelsky pohled
+Camera patchCam; // pevne nastavovany pohled z plosky
 
 // objekt sceny
 ModelContainer scene;
 
-// docasne - pro ruzne krokovani
+// docasne - pro ruzne testovani
 int step = 0;
+unsigned long lookFromPatch = 0;
+Camera::PatchLook lookFromPatchDir = Camera::PATCH_LOOK_FRONT;
 
 // zobrazit pouze wireframe?
 bool wireframe = false;
@@ -665,7 +669,10 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 				
 				// e
 				if (n_w_param == 0x45) {
-					// dump something!
+					cout << "patch cam: " << endl;
+					patchCam.DebugDump();
+					cout << "user cam: " << endl;
+					cam.DebugDump();
 				}
 
 				// f
@@ -693,12 +700,70 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 					printf("step: %i\n", step);
 				}
 
+				// pgUp
+				if (n_w_param == 0x21) {
+					if (lookFromPatch < scene.getPatchesCount()) {
+						lookFromPatch++;
+
+						Patch p = scene.getPatch(lookFromPatch-1);
+						vector<float> vs = p.getVerticesCoords();
+						Vector3f no = p.getNormal(); no.Normalize();
+						Vector3f ce = p.getCenter();
+						cout << "----------------------------" << endl;
+						cout << "vec1: " << setw(8) << vs[0] << "\t" << setw(8) << vs[1] << "\t" << setw(8) << vs[2] << endl;
+						cout << "vec2: " << setw(8) << vs[3] << "\t" << setw(8) << vs[4] << "\t" << setw(8) << vs[5] << endl;
+						cout << "vec3: " << setw(8) << vs[6] << "\t" << setw(8) << vs[7] << "\t" << setw(8) << vs[8] << endl;
+						cout << "vec4: " << setw(8) << vs[9] << "\t" << setw(8) << vs[10] << "\t" << setw(8) << vs[11] << endl;
+						cout << "norm: " << setw(8) << no[0] << "\t" << setw(8) << no[1] << "\t" << setw(8) << no[2] << endl;
+						cout << "cntr: " << setw(8) << ce[0] << "\t" << setw(8) << ce[1] << "\t" << setw(8) << ce[2] << endl;
+					}
+					printf("looking from patch: %lu\n", (lookFromPatch-1)); // posunute cislovani
+					cout << "----------------------------" << endl;
+				}
+				// pgDown
+				if (n_w_param == 0x22) {
+					if (lookFromPatch > 0) {
+						lookFromPatch--;						
+					}
+					if (lookFromPatch > 0) {
+						printf("looking from patch: %lu\n", (lookFromPatch-1)); // posunute cislovani
+						cout << "----------------------------" << endl;
+					} else
+						cout << "free view" << endl;
+				}
+				// up
+				if (n_w_param == 0x26) {
+					lookFromPatchDir = Camera::PATCH_LOOK_UP;
+					cout << "looking up" << endl;
+				}
+				// down
+				if (n_w_param == 0x28) {
+					lookFromPatchDir = Camera::PATCH_LOOK_DOWN;
+					cout << "looking down" << endl;
+				}
+				// left
+				if (n_w_param == 0x25) {
+					lookFromPatchDir = Camera::PATCH_LOOK_LEFT;
+					cout << "looking left" << endl;
+				}
+				// right
+				if (n_w_param == 0x27) {
+					lookFromPatchDir = Camera::PATCH_LOOK_RIGHT;
+					cout << "looking right" << endl;
+				}
+				// space
+				if (n_w_param == 0x20) {
+					lookFromPatchDir = Camera::PATCH_LOOK_FRONT;
+					cout << "looking front" << endl;
+				}
+
+
 				return 0;
 
 
 		case WM_MOUSEMOVE:	
 			// ignorovat eventy pokud je zdrojem posunu SetCursorPos
-			if (!b_mouse_controlled) {
+			if (!b_mouse_controlled && lookFromPatch == 0) {
 				GLint viewport[4];
 				glGetIntegerv(GL_VIEWPORT, viewport);	// x, y, w, h  okna
 
@@ -714,7 +779,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 				if(dx || dy) {
 					dx *= mouse_sensitivity;
 					dy *= mouse_sensitivity;
-
+				
 					cam.Aim(-dy, dx); // invertovat osu Y pro spravne ovladani mysi
 					
 					b_mouse_controlled = true; // pristi event chceme ignorovat
@@ -759,7 +824,9 @@ void handleActiveKeys() {
 	// vysledkem jsou slozky vektoru ve smerech X ("strafe", ne otaceni) a Z
 	float x = -( (-1.0f * a_down) + (1.0f * d_down) ) * keys_sensitivity;	
 	float z = ( (-1.0f * s_down) + (1.0f * w_down) ) * keys_sensitivity;		
-	cam.Move(x, 0.0f, z);
+	
+	if (lookFromPatch == 0)
+		cam.Move(x, 0.0f, z);
 
 	// R - reset kamery
 	if (HIBYTE(GetKeyState(0x52)) & 0x01)
@@ -803,8 +870,14 @@ void OnIdle(CGL30Driver &driver)
 		Matrix4f t_modelview;
 		t_modelview.Identity();				
 
-		// vynasobit pohledem kamery
-		t_modelview *= cam.GetMatrix();
+		// vynasobit pohledem uzivatelske kamery anebo kamery patche
+		if (lookFromPatch == 0)
+			t_modelview *= cam.GetMatrix();
+		else {
+			Patch p = scene.getPatch(lookFromPatch-1);
+			patchCam.lookFromPatch(p, lookFromPatchDir);				
+			t_modelview *= patchCam.GetMatrix();
+		}
 
 		// matice pohledu kamery
 		t_mvp = t_projection * t_modelview;
