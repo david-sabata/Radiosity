@@ -97,3 +97,31 @@ vector<float> Patch::getVerticesCoords() {
 
 	return v;
 }
+
+/**
+ * Vraci Up vektor
+ */
+Vector3f Patch::getUp() {
+	return Vector3f(vec4 - vec1);
+}
+
+
+/**
+ * Vraci stred patche
+ */
+Vector3f Patch::getCenter() {
+	return Vector3f(
+		(vec1.x + vec2.x + vec3.x + vec4.x) / 4.0f,
+		(vec1.y + vec2.y + vec3.y + vec4.y) / 4.0f,
+		(vec1.z + vec2.z + vec3.z + vec4.z) / 4.0f
+	);
+}
+
+/**
+ * Vraci normalu patche
+ */
+Vector3f Patch::getNormal() {
+	Vector3f A = vec2 - vec1;
+	Vector3f B = vec4 - vec1;
+	return A.Cross(B);
+}
