@@ -27,7 +27,12 @@ Patch::~Patch(void) {
  * vraci NULL
  */
 vector<Patch*>* Patch::divide(double area) {	
-		
+
+	// deleni bude probihat pouze pokud patch nema pocatecni vlastni energii
+	if (energy.x > 0 || energy.y > 0 || energy.z > 0 || energy.w > 0)
+		return NULL;
+
+
 	/*
 		vec4	vec3			D	CD	C
 						-->		DA	E	BC
