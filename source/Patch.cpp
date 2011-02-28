@@ -8,6 +8,13 @@ Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4) {
 	Patch::vec4 = vec4;
 }
 
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f energy) {
+	Patch::vec1 = vec1;
+	Patch::vec2 = vec2;
+	Patch::vec3 = vec3;
+	Patch::vec4 = vec4;
+	Patch::energy = energy;
+}
 
 Patch::~Patch(void) {
 }
