@@ -7,12 +7,21 @@ PrimitiveModel::PrimitiveModel(int type) {
 	// nacist plosky z preddefinovanych poli: kazde 3 hodnoty jsou vertex, kazde 4 vertexy tvori patch, tj. 12 hodnot
 	switch(type) {
 		case ROOM:
-			for (int i=0; i < 60; i += 12) {
-				Vector3f vec1 = Vector3f(room[i], room[i+1], room[i+2]);
-				Vector3f vec2 = Vector3f(room[i+3], room[i+4], room[i+5]);
-				Vector3f vec3 = Vector3f(room[i+6], room[i+7], room[i+8]);
-				Vector3f vec4 = Vector3f(room[i+9], room[i+10], room[i+11]);
-				patches->push_back( new Patch(vec1, vec2, vec3, vec4) );
+			{
+				for (int i=0; i < 60; i += 12) {
+					Vector3f vec1 = Vector3f(room[i], room[i+1], room[i+2]);
+					Vector3f vec2 = Vector3f(room[i+3], room[i+4], room[i+5]);
+					Vector3f vec3 = Vector3f(room[i+6], room[i+7], room[i+8]);
+					Vector3f vec4 = Vector3f(room[i+9], room[i+10], room[i+11]);
+					patches->push_back( new Patch(vec1, vec2, vec3, vec4) );
+				}
+				// svetlo
+				Vector3f vec1 = Vector3f(3.430f, 5.488f, 2.270f);
+				Vector3f vec2 = Vector3f(3.430f, 5.488f, 3.320f);
+				Vector3f vec3 = Vector3f(2.130f, 5.488f, 3.320f);
+				Vector3f vec4 = Vector3f(2.130f, 5.488f, 2.270f);
+				Color4f col = Color4f(1.0f, 1.0f, 1.0f, 1.0f);
+				patches->push_back( new Patch(vec1, vec2, vec3, vec4, col) );
 			}
 			break;
 		case CUBE:
