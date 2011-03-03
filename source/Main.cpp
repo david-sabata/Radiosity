@@ -11,6 +11,7 @@
 #include "ModelContainer.h"
 #include "Colors.h"
 #include "FrameBuffer.h"
+#include "Shaders.h"
 #include <vld.h> 
 
 // parametr pro subdivision
@@ -35,10 +36,13 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 static GLuint n_box_texture, n_fire_texture;
 static GLuint n_vertex_buffer_object, n_index_buffer_object, n_vertex_array_object, n_tex_buffer_object,
 	n_vbo_square, n_vao_square;
-static GLuint n_vertex_shader, n_fragment_shader, n_program_object, n_mvp_matrix_uniform,
+
+static GLuint n_user_program_object, n_mvp_matrix_uniform,
 	n_box_sampler_uniform, n_fire_sampler_uniform, n_time_uniform;
+
+static GLuint n_patch_program_object, n_patchprogram_mvp_matrix_uniform;
+
 static GLuint n_color_buffer_object;
-//static GLuint n_color_array_object;
 static GLuint* n_color_array_object = NULL; // pole VAO pro kazdy interval vykreslovanych patchu
 // OpenGL objekty
 
@@ -68,7 +72,6 @@ int step = 0;
 unsigned long lookFromPatch = 0;
 Camera::PatchLook lookFromPatchDir = Camera::PATCH_LOOK_FRONT;
 CGLFrameBufferObject* fbo = NULL;
-GLuint fboId = 0;
 
 // zobrazit pouze wireframe?
 bool wireframe = false;
@@ -83,93 +86,6 @@ typedef struct {
 static vector<interval> patchIntervals; 
 
 
-/**
- *	@brief zkontroluje zda byl shader spravne zkompilovan, tiskne chyby do stderr
- *	@param[in] n_shader_object je id shaderu
- *	@param[in] p_s_shader_name je jmeno shaderu (jen pro uzivatele - aby vedel o ktery shader se jedna pokud se vytiskne nejaka chyba)
- *	@return vraci true pro uspesne zkompilovane shadery, jinak false
- */
-bool CheckShader(GLuint n_shader_object, const char *p_s_shader_name)
-{
-	bool b_compiled;
-	{
-		int n_tmp;
-		glGetShaderiv(n_shader_object, GL_COMPILE_STATUS, &n_tmp);
-		b_compiled = n_tmp == GL_TRUE;
-	}
-	int n_log_length;
-	glGetShaderiv(n_shader_object, GL_INFO_LOG_LENGTH, &n_log_length);
-	// query status ...
-
-	if(n_log_length > 1) {
-		char *p_s_info_log;
-		try {
-			p_s_info_log = new char[n_log_length + 1];
-		} catch (bad_alloc& ba) {
-			ba = NULL;
-			return false;
-		}
-		//if(!(p_s_info_log = new(std::nothrow) char[n_log_length + 1]))
-		//			return false;
-		// alloc temp storage for log string
-
-		glGetShaderInfoLog(n_shader_object, n_log_length, &n_log_length, p_s_info_log);
-		// get log string
-
-		printf("GLSL compiler (%s): %s\n", p_s_shader_name, p_s_info_log);
-		// print info log
-
-		delete[] p_s_info_log;
-		// delete temp storage
-	}
-	// get info-log
-
-	return b_compiled;
-}
-
-/**
- *	@brief zkontroluje zda byl program spravne slinkovan, tiskne chyby do stderr
- *	@param[in] n_program_object je id programu
- *	@param[in] p_s_program_name je jmeno programu (jen pro uzivatele - aby vedel o ktery program se jedna pokud se vytiskne nejaka chyba)
- *	@return vraci true pro uspesne slinkovne programy, jinak false
- */
-bool CheckProgram(GLuint n_program_object, const char *p_s_program_name)
-{
-	bool b_linked;
-	{
-		int n_tmp;
-		glGetProgramiv(n_program_object, GL_LINK_STATUS, &n_tmp);
-		b_linked = n_tmp == GL_TRUE;
-	}
-	int n_length;
-	glGetProgramiv(n_program_object, GL_INFO_LOG_LENGTH, &n_length);
-	// query status ...
-
-	if(n_length > 1) {
-		char *p_s_info_log;
-		try {
-			p_s_info_log = new char[n_length + 1];
-		} catch (bad_alloc& ba) {
-			ba = NULL;
-			return false;
-		}
-		//if(!(p_s_info_log = new(std::nothrow) char[n_length + 1]))
-		//			return false;
-		// alloc temp log
-
-		glGetProgramInfoLog(n_program_object, n_length, &n_length, p_s_info_log);
-		// get info log
-
-		printf("GLSL linker (%s): %s\n", p_s_program_name, p_s_info_log);
-		// print info log
-
-		delete[] p_s_info_log;
-		// release temp log
-	}
-	// get info-log
-
-	return b_linked;
-}
 
 /**
  *	@brief vyrobi OpenGL texturu z bitmapy
@@ -382,124 +298,44 @@ bool InitGLObjects() {
 
 
 
-
-	const char *p_s_vertex_shader =
-		"#version 330\n"		
-		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
-		"in vec3 v_col;\n" // barva vrcholu
-		"in vec2 v_tex;\n" // souradnice textury
-		"\n"
-		"uniform float f_time;\n" // parametr shaderu - cas pro animovani
-		"\n"
-		"uniform mat4 t_modelview_projection_matrix;\n" // parametr shaderu - transformacni matice
-		"\n"
-		"out vec3 v_color;\n"		
-		"out vec2 v_texcoord;\n" 
-		/*
-		"out vec2 v_texcoord1;\n" 
-		"out vec2 v_texcoord2;\n" 
-		"out vec2 v_texcoord3;\n" // vystupy - souradnice textury		
-		*/
-		"\n"
-		"void main()\n"
-		"{\n"
-		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
-		//"	 v_color = vec3(abs(sin(v_pos.x)), abs(sin(v_pos.y)), abs(sin(v_pos.z)) );\n"
-		"    v_color = v_col;\n"
-		"	 v_texcoord = v_tex;\n"
-		//"    v_texcoord = vec2(1.0, 1.0);\n" // zkopirujeme souradnice textury pro fragment shader
-		/*
-		"    v_texcoord1 = v_tex + vec2(sin(f_time), f_time);\n"
-		"    v_texcoord2 = v_tex + vec2(0.0, f_time * 1.5 + 1.0);\n"
-		"    v_texcoord3 = v_tex + vec2(sin(f_time + 1.0), f_time + 2.0);\n" // spocitame dalsi souradnice textury pro animaci ohne
-		*/
-		"}\n";
-
-
-	const char *p_s_fragment_shader =
-		"#version 330\n"
-		"in vec3 v_color;\n" // vstupy z vertex shaderu
-		"in vec2 v_texcoord;\n"
-		"\n"
-		"out vec4 frag_color;\n" // vystup do framebufferu
-		"\n"
-		//"uniform sampler2D n_box_tex, n_fire_tex;\n"
-		"uniform sampler2D n_box_tex;\n"
-		"\n"
-		"void main()\n"
-		"{\n"
-		"    frag_color = vec4(v_color, 1.0f);\n"
-
-		"    vec4 box_color = texture(n_box_tex, v_texcoord);\n" // precte texturu krabice
-		/*
-		"    vec4 fire_color = texture2D(n_fire_tex, v_texcoord1) +\n"
-		"        texture2D(n_fire_tex, v_texcoord2) +\n"
-		"        texture2D(n_fire_tex, v_texcoord3);\n" // precte tri vrstvy textury ohne (animace vznika vypoctem souradnic textury ve vertex shaderu)
-		*/
-		"    frag_color = mix(frag_color, box_color, 0.5);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
-		//"	   frag_color = box_color;\n"
-		//"    frag_color = mix(frag_color, box_color, 0.5);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
-		"}\n";
-	// zdrojove kody pro vertex / fragment shader (OpenGL 3 uz nepouziva specifikator 'varying', jinak je kod stejny)
-
-
-	// zkompiluje vertex / fragment shader, pripoji je k programu
-	n_vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(n_vertex_shader, 1, &p_s_vertex_shader, NULL);
-	glCompileShader(n_vertex_shader);
-	if(!CheckShader(n_vertex_shader, "vertex shader"))
-		return false;
-	n_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(n_fragment_shader, 1, &p_s_fragment_shader, NULL);
-	glCompileShader(n_fragment_shader);
-	if(!CheckShader(n_fragment_shader, "fragment shader"))
-		return false;
-	n_program_object = glCreateProgram();
-	glAttachShader(n_program_object, n_vertex_shader);
-	glAttachShader(n_program_object, n_fragment_shader);
-	
-	// nabinduje atributy (propojeni mezi obsahem VBO a vstupem do vertex shaderu)
-	glBindAttribLocation(n_program_object, 0, "v_pos");
-	glBindAttribLocation(n_program_object, 1, "v_col");
-	glBindAttribLocation(n_program_object, 2, "v_tex");
-	
-	// nabinduje vystupni promenou (propojeni mezi framebufferem a vystupem fragment shaderu)
-	glBindFragDataLocation(n_program_object, 0, "frag_color");
-	
-	// slinkuje program
-	glLinkProgram(n_program_object);
-	if(!CheckProgram(n_program_object, "program"))
-		return false;
+	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro uzivatelsky pohled
+	n_user_program_object = Shaders::getUserViewProgram();
 	
 	// najde cislo parametru shaderu podle jeho jmena
-	n_mvp_matrix_uniform = glGetUniformLocation(n_program_object, "t_modelview_projection_matrix");
-	n_box_sampler_uniform = glGetUniformLocation(n_program_object, "n_box_tex");
-	//n_fire_sampler_uniform = glGetUniformLocation(n_program_object, "n_fire_tex");
-	n_time_uniform = glGetUniformLocation(n_program_object, "f_time");
+	n_mvp_matrix_uniform = glGetUniformLocation(n_user_program_object, "t_modelview_projection_matrix");
+	n_box_sampler_uniform = glGetUniformLocation(n_user_program_object, "n_box_tex");
+	//n_fire_sampler_uniform = glGetUniformLocation(n_user_program_object, "n_fire_tex");
+	n_time_uniform = glGetUniformLocation(n_user_program_object, "f_time");
 	
+		
+	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro pohled z patche
+	n_patch_program_object = Shaders::getPatchViewProgram();	
+	// najde cislo parametru shaderu podle jeho jmena
+	n_patchprogram_mvp_matrix_uniform = glGetUniformLocation(n_patch_program_object, "t_modelview_projection_matrix");
 	
+
+
+	/*
 	// nahraje obrazky
 	TBmp *p_box; //, *p_fire;
 	if(!(p_box = CTgaCodec::p_Load_TGA("box.tga"))) {
 		fprintf(stderr, "error: failed to load \'box.tga\'\n");
 		return false;
 	}
-	/*
 	if(!(p_fire = CTgaCodec::p_Load_TGA("fire.tga"))) {
 		p_box->Delete();
 		fprintf(stderr, "error: failed to load \'fire.tga\'\n");
 		return false;
 	}
-	*/
 	
 	// vyrobi z nich textury
-	//n_box_texture = n_GLTextureFromBitmap(p_box, GL_RGBA8);
-	//n_fire_texture = n_GLTextureFromBitmap(p_fire, GL_RGB8);
+	n_box_texture = n_GLTextureFromBitmap(p_box, GL_RGBA8);
+	n_fire_texture = n_GLTextureFromBitmap(p_fire, GL_RGB8);
 	
 	// uvolni pamet
 	p_box->Delete();
-	//p_fire->Delete();
-	
+	p_fire->Delete();
+	*/
 
 	// nabindovat texturu k FBO
 	//GLuint textureId;	
@@ -544,10 +380,8 @@ void CleanupGLObjects()
 	glDeleteBuffers(1, &n_index_buffer_object);
 	// smaze vertex buffer objekty
 
-	glDeleteShader(n_vertex_shader);
-	glDeleteShader(n_fragment_shader);
-	glDeleteProgram(n_program_object);
-	// smaze shadery
+	Shaders::cleanup();
+	// smaze shadery		
 
 	glDeleteTextures(1, &n_box_texture);
 	//glDeleteTextures(1, &n_fire_texture);
@@ -833,10 +667,10 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 
 				// pgUp
 				if (n_w_param == 0x21) {
-					if (lookFromPatch < scene.getPatchesCount()) {
+					if (lookFromPatch+1 < scene.getPatchesCount()) {
 						lookFromPatch++;
-
-						Patch p = scene.getPatch(lookFromPatch-1);
+						/*
+						Patch p = scene.getPatch(lookFromPatch);
 						vector<float> vs = p.getVerticesCoords();
 						Vector3f no = p.getNormal(); no.Normalize();
 						Vector3f ce = p.getCenter();
@@ -847,20 +681,16 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 						cout << "vec4: " << setw(8) << vs[9] << "\t" << setw(8) << vs[10] << "\t" << setw(8) << vs[11] << endl;
 						cout << "norm: " << setw(8) << no[0] << "\t" << setw(8) << no[1] << "\t" << setw(8) << no[2] << endl;
 						cout << "cntr: " << setw(8) << ce[0] << "\t" << setw(8) << ce[1] << "\t" << setw(8) << ce[2] << endl;
+						*/
 					}
-					printf("looking from patch: %lu\n", (lookFromPatch-1)); // posunute cislovani
-					cout << "----------------------------" << endl;
+					printf("looking from patch: %lu\n", lookFromPatch); // posunute cislovani
 				}
 				// pgDown
 				if (n_w_param == 0x22) {
 					if (lookFromPatch > 0) {
 						lookFromPatch--;						
 					}
-					if (lookFromPatch > 0) {
-						printf("looking from patch: %lu\n", (lookFromPatch-1)); // posunute cislovani
-						cout << "----------------------------" << endl;
-					} else
-						cout << "free view" << endl;
+					printf("looking from patch: %lu\n", lookFromPatch); // posunute cislovani
 				}
 				// up
 				if (n_w_param == 0x26) {
@@ -956,8 +786,7 @@ void handleActiveKeys() {
 	float x = -( (-1.0f * a_down) + (1.0f * d_down) ) * keys_sensitivity;	
 	float z = ( (-1.0f * s_down) + (1.0f * w_down) ) * keys_sensitivity;		
 	
-	if (lookFromPatch == 0)
-		cam.Move(x, 0.0f, z);
+	cam.Move(x, 0.0f, z);
 
 	// R - reset kamery
 	if (HIBYTE(GetKeyState(0x52)) & 0x01)
@@ -983,12 +812,16 @@ void OnIdle(CGL30Driver &driver)
 	
 	// cas pro animaci
 	float f_time = clock() / 1000.0f;
-	
-	
+		
 	// spustit vsechny akce spojene se stiskem klaves
 	// napriklad posun kamery
 	handleActiveKeys();
 	
+
+
+	// ***********************************************************************************
+	// Vykreslit do FBO pohled z patche
+	// ***********************************************************************************
 
 	// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu
 	Matrix4f t_mvp;
@@ -1001,21 +834,67 @@ void OnIdle(CGL30Driver &driver)
 		Matrix4f t_modelview;
 		t_modelview.Identity();				
 
-		// vynasobit pohledem uzivatelske kamery anebo kamery patche
-		if (lookFromPatch == 0)
-			t_modelview *= cam.GetMatrix();
-		else {
-			Patch p = scene.getPatch(lookFromPatch-1);
-			patchCam.lookFromPatch(p, lookFromPatchDir);				
-			t_modelview *= patchCam.GetMatrix();
-		}
+		// vynasobit pohledem kamery patche
+		Patch p = scene.getPatch(lookFromPatch);
+		patchCam.lookFromPatch(p, lookFromPatchDir);				
+		t_modelview *= patchCam.GetMatrix();
 
 		// matice pohledu kamery
 		t_mvp = t_projection * t_modelview;
 	}
 	
-	// pouzije shader, ktery jsme zkompilovali
-	glUseProgram(n_program_object);
+	// pouzije shader pro uzivatelsky pohled
+	glUseProgram(n_patch_program_object);
+	
+	// nahrajeme matici do OpenGL jako parametr shaderu
+	glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
+
+	// vykreslit do textury (pres FBO)
+	fbo->Bind();
+	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_box_texture);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glViewport(0, 0, 256, 256);
+	DrawScene();
+	fbo->Release();
+	
+
+
+
+	// ***********************************************************************************
+	// Vykreslit na obrazovku uzivatelsky pohled + nahledovy kriz
+	// ***********************************************************************************
+
+	// obonvit vychozi rozmer viewportu
+	glViewport(0, 0, n_width, n_height);
+
+	// nastavime textury (do prvni texturovaci jednotky da texturu krabice, do druhou da texturu ohne)		
+	
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, n_box_texture);		
+	/*
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, n_fire_texture); // opet - zadne enable / disable GL_TEXTURE_2D
+	*/
+
+	// nove nastavit modelview matici, tentokrat pro uzivatelsky (volny) pohled
+	{
+		// matice perspektivni projekce
+		Matrix4f t_projection;
+		CGLTransform::Perspective(t_projection, 90, float(n_width) / n_height, .01f, 1000);		
+		
+		// modelview
+		Matrix4f t_modelview;
+		t_modelview.Identity();				
+
+		// vynasobit pohledem uzivatelske kamery 
+		t_modelview *= cam.GetMatrix();
+
+		// matice pohledu kamery
+		t_mvp = t_projection * t_modelview;
+	}
+
+	// pouzije shader pro uzivatelsky pohled
+	glUseProgram(n_user_program_object);
 	
 	// nastavime parametry shaderu (musi se delat pokazde kdyz se shader pouzije)
 	// uniformni parametry se mohou prubezne menit
@@ -1030,33 +909,16 @@ void OnIdle(CGL30Driver &driver)
 		// nastavime cas pro animaci
 		glUniform1f(n_time_uniform, f_time);		
 	}
-		
+
+	// vykresli scenu
+	DrawScene(); 
+
+	// vykresli nahledovy kriz; obsahuje vlastni modelview matici pro fixni pozici na obrazovce
+	DrawSquare(); 
 
 
-	// vykreslit do FBO
-	fbo->Bind();
-	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_box_texture);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glViewport(0, 0, 256, 256);
-	DrawScene();
-	fbo->Release();
-	
-	glViewport(0, 0, n_width, n_height);
-
-	// nastavime textury (do prvni texturovaci jednotky da texturu krabice, do druhou da texturu ohne)
-	
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, n_box_texture);
-	/*
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, n_fire_texture); // opet - zadne enable / disable GL_TEXTURE_2D
-	*/
 
 
-	// vykreslime objekt pomoci VBO
-	
-	DrawScene(); // vykresli scenu
-	DrawSquare(); // vykresli nahledovy kriz	
 
 	// preklopi buffery, zobrazi co jsme nakreslili
 	driver.Blit(); 
