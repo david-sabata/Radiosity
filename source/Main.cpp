@@ -10,6 +10,7 @@
 #include "Camera.h"
 #include "ModelContainer.h"
 #include "Colors.h"
+#include "FrameBuffer.h"
 #include <vld.h> 
 
 // parametr pro subdivision
@@ -32,7 +33,8 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 // prototypy funkci
 
 static GLuint n_box_texture, n_fire_texture;
-static GLuint n_vertex_buffer_object, n_index_buffer_object, n_vertex_array_object;
+static GLuint n_vertex_buffer_object, n_index_buffer_object, n_vertex_array_object, n_tex_buffer_object,
+	n_vbo_square, n_vao_square;
 static GLuint n_vertex_shader, n_fragment_shader, n_program_object, n_mvp_matrix_uniform,
 	n_box_sampler_uniform, n_fire_sampler_uniform, n_time_uniform;
 static GLuint n_color_buffer_object;
@@ -65,6 +67,8 @@ ModelContainer scene;
 int step = 0;
 unsigned long lookFromPatch = 0;
 Camera::PatchLook lookFromPatchDir = Camera::PATCH_LOOK_FRONT;
+CGLFrameBufferObject* fbo = NULL;
+GLuint fboId = 0;
 
 // zobrazit pouze wireframe?
 bool wireframe = false;
@@ -233,6 +237,36 @@ bool InitGLObjects() {
 	
 	// data jsou uz zkopirovana ve VBO	
 	delete[] colorData; 	
+
+
+	// VBO pro ulozeni souradnic textur - TODO: resit uz pri nacitani
+	glGenBuffers(1, &n_tex_buffer_object);	
+	glBindBuffer(GL_ARRAY_BUFFER, n_tex_buffer_object);	
+	float* texCoords = new float[(scene.getVerticesCount() / 3) * 2];
+	int offset = 0; // offset v texCoords
+	for (int i = 0; i < scene.getVerticesCount() / 3; i++) {
+		switch( i % 4 ) {
+			case 0:
+				texCoords[offset] = 0.0f;
+				texCoords[offset + 1] = 0.0f;
+				break;
+			case 1:
+				texCoords[offset] = 1.0f;
+				texCoords[offset + 1] = 0.0f;
+				break;
+			case 2:
+				texCoords[offset] = 1.0f;
+				texCoords[offset + 1] = 1.0f;
+				break;
+			case 3:
+				texCoords[offset] = 0.0f;
+				texCoords[offset + 1] = 1.0f;
+				break;
+		}
+		offset += 2;
+	}
+	glBufferData(GL_ARRAY_BUFFER, (scene.getVerticesCount() / 3) * 2 * sizeof(float), texCoords, GL_STATIC_DRAW);
+	delete[] texCoords;
 		
 	// VAO definuje ktery VBO se preda shaderu a jak se data naskladaji do vstupnich atributu
 	glGenVertexArrays(1, &n_vertex_array_object);
@@ -251,6 +285,11 @@ bool InitGLObjects() {
 			glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
 		}
 
+		// rekneme OpenGL odkud si ma brat souradnice textur; souradnice se sklada ze dvou hodnot	
+		glBindBuffer(GL_ARRAY_BUFFER, n_tex_buffer_object);
+		glEnableVertexAttribArray(2);
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
+
 		// rekneme OpenGL odkud bude brat indexy geometrie pro glDrawElements (nize)
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, n_index_buffer_object);
 		
@@ -262,6 +301,7 @@ bool InitGLObjects() {
 	// nastaveni VBO. pak pri kresleni volame jen glBindVertexArray() namisto vsech prikazu v bloku vyse
 	glBindVertexArray(0); 
 	
+
 	
 	// rozdelit patche na intervaly: from - prvni patch v intervalu; to - patch za poslednim patchem v intervalu
 	int patchCount = scene.getIndicesCount() / 6;
@@ -298,6 +338,11 @@ bool InitGLObjects() {
 			glEnableVertexAttribArray(1);
 			glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));					
 		
+			// rekneme OpenGL odkud si ma brat souradnice textur; souradnice se sklada ze dvou hodnot	
+			glBindBuffer(GL_ARRAY_BUFFER, n_tex_buffer_object);
+			glEnableVertexAttribArray(2);
+			glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
+
 			// rekneme OpenGL odkud bude brat indexy geometrie pro glDrawElements
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, n_index_buffer_object);		
 
@@ -308,23 +353,52 @@ bool InitGLObjects() {
 	}
 
 	
+	// geometrie a texurovani nahledoveho ctverce pro pohledy z patchu
+	const float p_square[] = {
+		-1, -1, 0, 0, 0,
+		+1, -1, 0, 1, 0,
+		+1, +1, 0, 1, 1,
+		
+		-1, -1, 0, 0, 0,
+		+1, +1, 0, 1, 1,
+		-1, +1, 0, 0, 1,
+	};
+	glGenBuffers(1, &n_vbo_square);
+	glBindBuffer(GL_ARRAY_BUFFER, n_vbo_square);
+	glBufferData(GL_ARRAY_BUFFER, 6 * 5 * sizeof(float), p_square, GL_STATIC_DRAW);
+
+	glGenVertexArrays(1, &n_vao_square);
+	glBindVertexArray(n_vao_square);
+	{		
+		// rekneme OpenGL odkud si ma brat data; kazdy vrchol ma 3 souradnice,		
+		glBindBuffer(GL_ARRAY_BUFFER, n_vbo_square);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), p_OffsetInVBO(0));
+		glEnableVertexAttribArray(2);
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), p_OffsetInVBO(3 * sizeof(float)));
+	} // tento blok se "zapamatuje" ve VAO
+	
+	glBindVertexArray(0); 
+
+
 
 
 	const char *p_s_vertex_shader =
 		"#version 330\n"		
 		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
 		"in vec3 v_col;\n" // barva vrcholu
+		"in vec2 v_tex;\n" // souradnice textury
 		"\n"
 		"uniform float f_time;\n" // parametr shaderu - cas pro animovani
 		"\n"
 		"uniform mat4 t_modelview_projection_matrix;\n" // parametr shaderu - transformacni matice
 		"\n"
-		"out vec3 v_color;\n"
-		/*
+		"out vec3 v_color;\n"		
 		"out vec2 v_texcoord;\n" 
+		/*
 		"out vec2 v_texcoord1;\n" 
 		"out vec2 v_texcoord2;\n" 
-		"out vec2 v_texcoord3;\n" // vystupy - souradnice textury
+		"out vec2 v_texcoord3;\n" // vystupy - souradnice textury		
 		*/
 		"\n"
 		"void main()\n"
@@ -332,8 +406,9 @@ bool InitGLObjects() {
 		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
 		//"	 v_color = vec3(abs(sin(v_pos.x)), abs(sin(v_pos.y)), abs(sin(v_pos.z)) );\n"
 		"    v_color = v_col;\n"
+		"	 v_texcoord = v_tex;\n"
+		//"    v_texcoord = vec2(1.0, 1.0);\n" // zkopirujeme souradnice textury pro fragment shader
 		/*
-		"    v_texcoord = v_tex;\n" // zkopirujeme souradnice textury pro fragment shader
 		"    v_texcoord1 = v_tex + vec2(sin(f_time), f_time);\n"
 		"    v_texcoord2 = v_tex + vec2(0.0, f_time * 1.5 + 1.0);\n"
 		"    v_texcoord3 = v_tex + vec2(sin(f_time + 1.0), f_time + 2.0);\n" // spocitame dalsi souradnice textury pro animaci ohne
@@ -344,21 +419,26 @@ bool InitGLObjects() {
 	const char *p_s_fragment_shader =
 		"#version 330\n"
 		"in vec3 v_color;\n" // vstupy z vertex shaderu
+		"in vec2 v_texcoord;\n"
 		"\n"
 		"out vec4 frag_color;\n" // vystup do framebufferu
 		"\n"
-		"uniform sampler2D n_box_tex, n_fire_tex;\n"
+		//"uniform sampler2D n_box_tex, n_fire_tex;\n"
+		"uniform sampler2D n_box_tex;\n"
 		"\n"
 		"void main()\n"
 		"{\n"
 		"    frag_color = vec4(v_color, 1.0f);\n"
+
+		"    vec4 box_color = texture(n_box_tex, v_texcoord);\n" // precte texturu krabice
 		/*
-		"    vec4 box_color = texture2D(n_box_tex, v_texcoord);\n" // precte texturu krabice
 		"    vec4 fire_color = texture2D(n_fire_tex, v_texcoord1) +\n"
 		"        texture2D(n_fire_tex, v_texcoord2) +\n"
 		"        texture2D(n_fire_tex, v_texcoord3);\n" // precte tri vrstvy textury ohne (animace vznika vypoctem souradnic textury ve vertex shaderu)
-		"    frag_color = mix(fire_color, box_color, box_color.a);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
 		*/
+		"    frag_color = mix(frag_color, box_color, 0.5);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
+		//"	   frag_color = box_color;\n"
+		//"    frag_color = mix(frag_color, box_color, 0.5);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
 		"}\n";
 	// zdrojove kody pro vertex / fragment shader (OpenGL 3 uz nepouziva specifikator 'varying', jinak je kod stejny)
 
@@ -381,6 +461,7 @@ bool InitGLObjects() {
 	// nabinduje atributy (propojeni mezi obsahem VBO a vstupem do vertex shaderu)
 	glBindAttribLocation(n_program_object, 0, "v_pos");
 	glBindAttribLocation(n_program_object, 1, "v_col");
+	glBindAttribLocation(n_program_object, 2, "v_tex");
 	
 	// nabinduje vystupni promenou (propojeni mezi framebufferem a vystupem fragment shaderu)
 	glBindFragDataLocation(n_program_object, 0, "frag_color");
@@ -392,32 +473,62 @@ bool InitGLObjects() {
 	
 	// najde cislo parametru shaderu podle jeho jmena
 	n_mvp_matrix_uniform = glGetUniformLocation(n_program_object, "t_modelview_projection_matrix");
-	//n_box_sampler_uniform = glGetUniformLocation(n_program_object, "n_box_tex");
+	n_box_sampler_uniform = glGetUniformLocation(n_program_object, "n_box_tex");
 	//n_fire_sampler_uniform = glGetUniformLocation(n_program_object, "n_fire_tex");
 	n_time_uniform = glGetUniformLocation(n_program_object, "f_time");
 	
-	/*
+	
 	// nahraje obrazky
-	TBmp *p_box, *p_fire;
+	TBmp *p_box; //, *p_fire;
 	if(!(p_box = CTgaCodec::p_Load_TGA("box.tga"))) {
 		fprintf(stderr, "error: failed to load \'box.tga\'\n");
 		return false;
 	}
+	/*
 	if(!(p_fire = CTgaCodec::p_Load_TGA("fire.tga"))) {
 		p_box->Delete();
 		fprintf(stderr, "error: failed to load \'fire.tga\'\n");
 		return false;
 	}
+	*/
 	
 	// vyrobi z nich textury
-	n_box_texture = n_GLTextureFromBitmap(p_box, GL_RGBA8);
-	n_fire_texture = n_GLTextureFromBitmap(p_fire, GL_RGB8);
+	//n_box_texture = n_GLTextureFromBitmap(p_box, GL_RGBA8);
+	//n_fire_texture = n_GLTextureFromBitmap(p_fire, GL_RGB8);
 	
 	// uvolni pamet
 	p_box->Delete();
-	p_fire->Delete();
-	*/
+	//p_fire->Delete();
+	
 
+	// nabindovat texturu k FBO
+	//GLuint textureId;	
+	glGenTextures(1, &n_box_texture);
+	glBindTexture(GL_TEXTURE_2D, n_box_texture);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	
+	// vytvorit FBO pro kresleni pohledu z patchu do textury
+	fbo = new CGLFrameBufferObject(
+		256, 256,
+		1, true,
+		0, 0,
+		true, false,
+		GL_DEPTH_COMPONENT24, 0,
+		false, false, 0, 0);
+
+	cout << "FBO status " << fbo->b_Status() << endl;
+	cout << "FBO bind " << fbo->Bind() << endl;	
+	
+	cout << "FBO bind texture " << fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_box_texture) << endl;
+	cout << "FBO bind texture " << fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0) << endl;
+
+	cout << "FBO release " << fbo->Release() << endl;
+	
 	return true;
 }
 
@@ -438,9 +549,12 @@ void CleanupGLObjects()
 	glDeleteProgram(n_program_object);
 	// smaze shadery
 
-	//glDeleteTextures(1, &n_box_texture);
+	glDeleteTextures(1, &n_box_texture);
 	//glDeleteTextures(1, &n_fire_texture);
 	// smaze textury
+
+	delete fbo;
+	// smaze pokusny buffer
 }
 
 /**
@@ -450,7 +564,7 @@ void DrawScene() {
 	
 	int* indices = scene.getIndices();
 	float* vertices = scene.getVertices();
-
+	
 	if (step > 0) { // globalni - pro moznost prepinani
 	
 		// for each interval (   <from; to)   )
@@ -508,6 +622,27 @@ void DrawScene() {
 }
 
 /**
+ * Vykresli nahledovy ctverec s pohledem 'patchove' kamery
+ */
+void DrawSquare() {		
+	Matrix4f t_mvp;
+	t_mvp.Identity();
+	t_mvp.Scale(1, float(n_width) / n_height, 1);
+	t_mvp.Scale(0.25);
+	t_mvp.Translate(-1.0, -1.0, 0);
+	
+	glUniformMatrix4fv(n_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
+
+	glBindVertexArray(n_vao_square);			
+	glVertexAttrib3f(1, .5, .5, .5);			
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+	// vratime VAO 0, abychom si nahodne VAO nezmenili (pripadne osetreni 
+	//proti chybe v ovladacich nvidia kde se VAO poskodi pri volani nekterych wgl funkci)		
+	glBindVertexArray(0); 		
+}
+
+/**
  *	@brief main
  *	@param[in] n_arg_num je pocet argumentu prikazove radky
  *	@param[in] p_arg_list je seznam argumentu prikazove radky; tento program neni nejak ovladan prikazovou radkou a ignoruje ji
@@ -515,10 +650,6 @@ void DrawScene() {
  */
 int main(int n_arg_num, const char **p_arg_list)
 {
-	// Vypis memory leaku po kazdem ukonceni aplikace
-	//_CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );
-	//_CrtSetReportMode( _CRT_ERROR, _CRTDBG_MODE_DEBUG );
-
 	// registruje tridu okna
 	WNDCLASSEX t_wnd_class;
 	t_wnd_class.cbSize = sizeof(WNDCLASSEX);
@@ -893,24 +1024,40 @@ void OnIdle(CGL30Driver &driver)
 		glUniformMatrix4fv(n_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
 		
 		// nastavime cisla texturovacich jednotek, odkud si shader bude brat textury
-		//glUniform1i(n_box_sampler_uniform, 0);
+		glUniform1i(n_box_sampler_uniform, 0);
 		//glUniform1i(n_fire_sampler_uniform, 1);
 		
 		// nastavime cas pro animaci
 		glUniform1f(n_time_uniform, f_time);		
 	}
+		
+
+
+	// vykreslit do FBO
+	fbo->Bind();
+	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_box_texture);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glViewport(0, 0, 256, 256);
+	DrawScene();
+	fbo->Release();
 	
-	/*
+	glViewport(0, 0, n_width, n_height);
+
 	// nastavime textury (do prvni texturovaci jednotky da texturu krabice, do druhou da texturu ohne)
+	
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, n_box_texture);
+	/*
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, n_fire_texture); // opet - zadne enable / disable GL_TEXTURE_2D
 	*/
 
+
 	// vykreslime objekt pomoci VBO
-	DrawScene();
 	
+	DrawScene(); // vykresli scenu
+	DrawSquare(); // vykresli nahledovy kriz	
+
 	// preklopi buffery, zobrazi co jsme nakreslili
 	driver.Blit(); 
 }
