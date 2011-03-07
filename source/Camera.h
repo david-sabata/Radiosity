@@ -16,7 +16,7 @@ class Camera {
 	public:
 
 		static enum PatchLook {
-			PATCH_LOOK_FRONT,
+			PATCH_LOOK_FRONT = 0,
 			PATCH_LOOK_UP,
 			PATCH_LOOK_DOWN,
 			PATCH_LOOK_LEFT,
