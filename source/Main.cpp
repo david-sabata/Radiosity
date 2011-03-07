@@ -34,6 +34,9 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 // prototypy funkci
 
 static GLuint n_box_texture, n_fire_texture;
+
+static GLuint n_patchlook_texture[5];
+
 static GLuint n_vertex_buffer_object, n_index_buffer_object, n_vertex_array_object, n_tex_buffer_object,
 	n_vbo_square, n_vao_square;
 
@@ -270,7 +273,9 @@ bool InitGLObjects() {
 
 	
 	// geometrie a texurovani nahledoveho ctverce pro pohledy z patchu
+	// 3 souradnice vrcholu, 2 souradnice textury
 	const float p_square[] = {
+		// stredni ctverec
 		-1, -1, 0, 0, 0,
 		+1, -1, 0, 1, 0,
 		+1, +1, 0, 1, 1,
@@ -278,10 +283,46 @@ bool InitGLObjects() {
 		-1, -1, 0, 0, 0,
 		+1, +1, 0, 1, 1,
 		-1, +1, 0, 0, 1,
+
+		// horni pulka
+		-1, +1,   0, 0, 0,
+		+1, +1,   0, 1, 0,
+		+1, +1.5, 0, 1, 1,
+
+		-1, +1,   0, 0, 0,
+		+1, +1.5, 0, 1, 1,
+		-1, +1.5, 0, 0, 1,
+
+		// dolni pulka
+		-1, -1,   0, 0, 1,
+		+1, -1,   0, 1, 1,
+		+1, -1.5, 0, 1, 0,
+
+		-1, -1,   0, 0, 1,
+		+1, -1.5, 0, 1, 0,
+		-1, -1.5, 0, 0, 0,
+
+		// leva pulka
+		-1,   -1, 0, 1, 0,
+		-1,   +1, 0, 1, 1,
+		-1.5, +1, 0, 0, 1,
+
+		-1,   -1, 0, 1, 0,		
+		-1.5, +1, 0, 0, 1,
+		-1.5, -1, 0, 0, 0,
+
+		// prava pulka
+		+1,   +1, 0, 0, 1,
+		+1,   -1, 0, 0, 0,
+		+1.5, -1, 0, 1, 0,
+
+		+1,   +1, 0, 0, 1,
+		+1.5, -1, 0, 1, 0,
+		+1.5, +1, 0, 1, 1,
 	};
 	glGenBuffers(1, &n_vbo_square);
 	glBindBuffer(GL_ARRAY_BUFFER, n_vbo_square);
-	glBufferData(GL_ARRAY_BUFFER, 6 * 5 * sizeof(float), p_square, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, 30 * 5 * sizeof(float), p_square, GL_STATIC_DRAW);
 
 	glGenVertexArrays(1, &n_vao_square);
 	glBindVertexArray(n_vao_square);
@@ -337,15 +378,16 @@ bool InitGLObjects() {
 	p_fire->Delete();
 	*/
 
-	// nabindovat texturu k FBO
-	//GLuint textureId;	
-	glGenTextures(1, &n_box_texture);
-	glBindTexture(GL_TEXTURE_2D, n_box_texture);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	// nabindovat textury k FBO
+	glGenTextures(5, n_patchlook_texture);
+	for (int i=0; i < 5; i++) {		
+		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture[i]);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);				
+	}
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 	// vytvorit FBO pro kresleni pohledu z patchu do textury
@@ -357,13 +399,17 @@ bool InitGLObjects() {
 		GL_DEPTH_COMPONENT24, 0,
 		false, false, 0, 0);
 
-	cout << "FBO status " << fbo->b_Status() << endl;
-	cout << "FBO bind " << fbo->Bind() << endl;	
+	cout << "FBO init status " << fbo->b_Status() << endl;
+	//cout << "FBO bind " << fbo->Bind() << endl;	
 	
-	cout << "FBO bind texture " << fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_box_texture) << endl;
-	cout << "FBO bind texture " << fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0) << endl;
+	/*
+	for (int i=0; i < 5; i++)
+		cout << "FBO bind texture " << i << ": " << fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture[i]) << endl;
 
-	cout << "FBO release " << fbo->Release() << endl;
+	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
+	*/
+
+	//cout << "FBO release " << fbo->Release() << endl;
 	
 	return true;
 }
@@ -385,6 +431,7 @@ void CleanupGLObjects()
 
 	glDeleteTextures(1, &n_box_texture);
 	//glDeleteTextures(1, &n_fire_texture);
+	glDeleteTextures(5, n_patchlook_texture);
 	// smaze textury
 
 	delete fbo;
@@ -468,8 +515,17 @@ void DrawSquare() {
 	glUniformMatrix4fv(n_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
 
 	glBindVertexArray(n_vao_square);			
-	glVertexAttrib3f(1, .5, .5, .5);			
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glVertexAttrib3f(1, 0.0, 0.0, 0.0);			
+
+	// vykreslit jednotlive casti s odpovidajicimi texturami (i odpovida Camera::PatchLook)
+	for (int i=0; i < 5; i++) {
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture[i]);		
+		glDrawArrays(GL_TRIANGLES, 6 * i, 6);
+	}
+
+	// zrusit bind textury
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	// vratime VAO 0, abychom si nahodne VAO nezmenili (pripadne osetreni 
 	//proti chybe v ovladacich nvidia kde se VAO poskodi pri volani nekterych wgl funkci)		
@@ -724,7 +780,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 
 		case WM_MOUSEMOVE:	
 			// ignorovat eventy pokud je zdrojem posunu SetCursorPos
-			if (!b_mouse_controlled && lookFromPatch == 0) {
+			if (!b_mouse_controlled) {
 				GLint viewport[4];
 				glGetIntegerv(GL_VIEWPORT, viewport);	// x, y, w, h  okna
 
@@ -817,47 +873,56 @@ void OnIdle(CGL30Driver &driver)
 	// napriklad posun kamery
 	handleActiveKeys();
 	
+	Matrix4f t_mvp;
 
 
 	// ***********************************************************************************
 	// Vykreslit do FBO pohled z patche
 	// ***********************************************************************************
 
-	// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu
-	Matrix4f t_mvp;
-	{
-		// matice perspektivni projekce
-		Matrix4f t_projection;
-		CGLTransform::Perspective(t_projection, 90, float(n_width) / n_height, .01f, 1000);		
-		
-		// modelview
-		Matrix4f t_modelview;
-		t_modelview.Identity();				
-
-		// vynasobit pohledem kamery patche
-		Patch p = scene.getPatch(lookFromPatch);
-		patchCam.lookFromPatch(p, lookFromPatchDir);				
-		t_modelview *= patchCam.GetMatrix();
-
-		// matice pohledu kamery
-		t_mvp = t_projection * t_modelview;
-	}
-	
 	// pouzije shader pro uzivatelsky pohled
 	glUseProgram(n_patch_program_object);
-	
-	// nahrajeme matici do OpenGL jako parametr shaderu
-	glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
 
-	// vykreslit do textury (pres FBO)
 	fbo->Bind();
-	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_box_texture);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glViewport(0, 0, 256, 256);
-	DrawScene();
+
+	// celkem 5 pohledu
+	for (int i=0; i < 5; i++) {
+		lookFromPatchDir = (Camera::PatchLook)i;
+
+		// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
+		{
+			// matice perspektivni projekce
+			Matrix4f t_projection;
+			CGLTransform::Perspective(t_projection, 90, float(n_width) / n_height, .01f, 1000);		
+		
+			// modelview
+			Matrix4f t_modelview;
+			t_modelview.Identity();				
+
+			// vynasobit pohledem kamery patche
+			Patch p = scene.getPatch(lookFromPatch);
+			patchCam.lookFromPatch(p, lookFromPatchDir);				
+			t_modelview *= patchCam.GetMatrix();
+
+			// matice pohledu kamery
+			t_mvp = t_projection * t_modelview;
+		}
+				
+		// nahrajeme matici do OpenGL jako parametr shaderu
+		glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
+
+		// vykreslit do textury (pres FBO)		
+		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture[i]);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		
+		DrawScene();	
+
+		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
+	}
+
 	fbo->Release();
 	
-
 
 
 	// ***********************************************************************************
@@ -868,10 +933,9 @@ void OnIdle(CGL30Driver &driver)
 	glViewport(0, 0, n_width, n_height);
 
 	// nastavime textury (do prvni texturovaci jednotky da texturu krabice, do druhou da texturu ohne)		
-	
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, n_box_texture);		
 	/*
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, n_box_texture);				
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, n_fire_texture); // opet - zadne enable / disable GL_TEXTURE_2D
 	*/
@@ -913,9 +977,11 @@ void OnIdle(CGL30Driver &driver)
 	// vykresli scenu
 	DrawScene(); 
 
+
+	
+
 	// vykresli nahledovy kriz; obsahuje vlastni modelview matici pro fixni pozici na obrazovce
 	DrawSquare(); 
-
 
 
 

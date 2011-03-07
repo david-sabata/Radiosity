@@ -146,8 +146,9 @@ GLuint Shaders::getUserViewProgram() {
 		"{\n"
 		"    frag_color = vec4(v_color, 1.0f);\n"
 		"    vec4 box_color = texture(n_box_tex, v_texcoord);\n" // precte texturu krabice		
-		//"	   frag_color = box_color;\n"
-		"    frag_color = mix(frag_color, box_color, 0.5);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
+		"	if (box_color.x > 0 || box_color.y > 0 || box_color.z > 0 || box_color.w > 0)\n"
+		"	   frag_color = box_color;\n"
+		//"    frag_color = mix(frag_color, box_color, 0.5);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
 		"}\n";
 	// zdrojove kody pro vertex / fragment shader (OpenGL 3 uz nepouziva specifikator 'varying', jinak je kod stejny)
 
