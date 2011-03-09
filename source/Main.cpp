@@ -888,7 +888,7 @@ void OnIdle(CGL30Driver &driver)
 
 	// celkem 5 pohledu
 	for (int i=0; i < 5; i++) {
-		lookFromPatchDir = (Camera::PatchLook)i;
+		Camera::PatchLook dir = (Camera::PatchLook)i;
 
 		// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
 		{
@@ -902,7 +902,7 @@ void OnIdle(CGL30Driver &driver)
 
 			// vynasobit pohledem kamery patche
 			Patch p = scene.getPatch(lookFromPatch);
-			patchCam.lookFromPatch(p, lookFromPatchDir);				
+			patchCam.lookFromPatch(p, dir);
 			t_modelview *= patchCam.GetMatrix();
 
 			// matice pohledu kamery
@@ -950,7 +950,7 @@ void OnIdle(CGL30Driver &driver)
 		Matrix4f t_modelview;
 		t_modelview.Identity();				
 
-		// vynasobit pohledem uzivatelske kamery 
+		// vynasobit pohledem uzivatelske kamery
 		t_modelview *= cam.GetMatrix();
 
 		// matice pohledu kamery
