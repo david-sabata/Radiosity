@@ -225,9 +225,9 @@ bool InitGLObjects() {
 	glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);	
 	
 	Colors::setNeededColors(scene.getIndicesCount() / 4); // idealni rozsah barev
-	unsigned int* colorData = Colors::getIndicesColors(); // colorRange * 4 indexy
+	uint32_t* colorData = Colors::getIndicesColors(); // colorRange * 4 indexy
 	unsigned int colorRange = Colors::getColorRange();		
-	glBufferData(GL_ARRAY_BUFFER, colorRange * 4 * sizeof(unsigned int), colorData, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, colorRange * 4 * sizeof(uint32_t), colorData, GL_STATIC_DRAW);
 
 	cout << " unique colors: " << colorRange << endl;
 	
@@ -292,12 +292,12 @@ bool InitGLObjects() {
 			glBindBuffer(GL_ARRAY_BUFFER, n_vertex_buffer_object);
 			glEnableVertexAttribArray(0);
 			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(3 * 4 * patchIntervals[i].from * sizeof(float)));
-			
+
 			// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva ma 3 hodnoty,		
 			glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);
 			glEnableVertexAttribArray(1);
-			glVertexAttribPointer(1, 1, GL_UNSIGNED_INT, GL_FALSE, 0, p_OffsetInVBO(0));					
-		
+			glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, GL_FALSE, 0, p_OffsetInVBO(0));
+
 			// rekneme OpenGL odkud bude brat indexy geometrie pro glDrawElements
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, n_index_buffer_object);		
 
@@ -493,7 +493,8 @@ void DrawScene() {
 		
 		for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
 			glBindVertexArray(n_color_array_object[i]);			
-			glVertexAttrib3f(1, colors[3 * i], colors[3 * i + 1], colors[3 * i + 2]);			
+			//glVertexAttrib3f(1, colors[3 * i], colors[3 * i + 1], colors[3 * i + 2]);			
+			glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, colors[i]);
 			int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);	
 			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));
 		}

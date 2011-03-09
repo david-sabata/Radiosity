@@ -34,8 +34,8 @@ class Colors {
 		static void setNeededColors(unsigned int colors);
 
 		static unsigned int getColorRange();
-		static unsigned int* getUniqueColors();
-		static unsigned int* getIndicesColors();
+		static uint32_t* getUniqueColors();
+		static uint32_t* getIndicesColors();
 
 };
 

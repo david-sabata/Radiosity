@@ -89,9 +89,9 @@ uint32_t Colors::color(size_t colorIndex) {
  * Vraci pole int-u kde kazdy int obsahuje 'zabalene' tri slozky jedne barvy
  * Pocet barev (prvku pole) odpovida getColorRange()
  */
-unsigned int* Colors::getUniqueColors() {	
+uint32_t* Colors::getUniqueColors() {	
 	unsigned int range = getColorRange();
-	unsigned int* colors = new unsigned int[range]; // 1 hodnota = 1 barva obsahujici zabalene 3 slozky
+	uint32_t* colors = new uint32_t[range]; // 1 hodnota = 1 barva obsahujici zabalene 3 slozky
 	
 	for (unsigned int i = 1; i < range + 1; i++)
 		colors[i-1] = color(i);
@@ -104,11 +104,11 @@ unsigned int* Colors::getUniqueColors() {
  * 6 po sobe jdoucich barev je stejnych. Patch se sklada ze dvou
  * trojuhelniku, tj. 4 (unikatnich) vrcholu, ktere museji mit stejnou barvu
  */
-unsigned int* Colors::getIndicesColors() {
+uint32_t* Colors::getIndicesColors() {
 	unsigned int indices = 4; // pocet indexu se stejnou barvou
 	unsigned long range = getColorRange();
-	unsigned int* uniqueColors = getUniqueColors();
-	unsigned int* indicesColors = new unsigned int[range * indices];
+	uint32_t* uniqueColors = getUniqueColors();
+	uint32_t* indicesColors = new uint32_t[range * indices];
 	
 	for (unsigned int i = 0; i < range; i++) { // i = aktualne klonovana barva		
 		for (unsigned int j = 0; j < indices; j++) { // j = cislo vrcholu se stejnou barvou
