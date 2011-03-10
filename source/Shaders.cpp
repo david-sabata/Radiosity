@@ -115,28 +115,23 @@ GLuint Shaders::getUserViewProgram() {
 	const char *p_s_vertex_shader =
 		"#version 330\n"		
 		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
-		"in vec3 v_col;\n" // barva vrcholu
 		"in vec2 v_tex;\n" // souradnice textury
-		"\n"
-		"uniform float f_time;\n" // parametr shaderu - cas pro animovani
 		"\n"
 		"uniform mat4 t_modelview_projection_matrix;\n" // parametr shaderu - transformacni matice
 		"\n"
-		"out vec3 v_color;\n"		
-		"out vec2 v_texcoord;\n" 		
+		"out vec2 v_texcoord, v_normal_tex;\n" 		
 		"\n"
 		"void main()\n"
 		"{\n"
 		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
-		"    v_color = v_col;\n"
-		"	 v_texcoord = v_tex;\n"		
+		"	 v_texcoord = v_tex;\n"
+		"    v_normal_tex = v_tex * 2.0 - 1.0;\n"		
 		"}\n";
 
 
 	const char *p_s_fragment_shader =
 		"#version 330\n"
-		"in vec3 v_color;\n" // vstupy z vertex shaderu
-		"in vec2 v_texcoord;\n"
+		"in vec2 v_texcoord, v_normal_tex;\n"
 		"\n"
 		"out vec4 frag_color;\n" // vystup do framebufferu
 		"\n"
@@ -144,11 +139,39 @@ GLuint Shaders::getUserViewProgram() {
 		"\n"
 		"void main()\n"
 		"{\n"
-		"    frag_color = vec4(v_color, 1.0f);\n"
-		"    vec4 box_color = texture(n_box_tex, v_texcoord);\n" // precte texturu krabice		
-		"	if (box_color.x > 0 || box_color.y > 0 || box_color.z > 0 || box_color.w > 0)\n"
-		"	   frag_color = box_color;\n"
-		//"    frag_color = mix(frag_color, box_color, 0.5);\n" // smicha texturu a krabici podle alfa kanalu krabice (je tam vyznacene co ma byt pruhledne a co ne)
+		"    vec4 tex_color = vec4(0.0);"
+		"    if(v_texcoord.y >= 0.25 && v_texcoord.y <= 0.75) {"
+		"        if(v_texcoord.x < 0.25)"
+		"            tex_color = texture(n_box_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.25/0.25, 0.66667/0.5));"
+		"        else if(v_texcoord.x < 0.75)"
+		"            tex_color = texture(n_box_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.5/0.5, 0.66667/0.5));"
+		"        else"
+		"            tex_color = texture(n_box_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.25/0.25, 0.66667/0.5));"
+		"    } else if(v_texcoord.y < 0.25 && v_texcoord.x >= 0.25 && v_texcoord.x <= 0.75)"
+		"        tex_color = texture(n_box_tex, (v_texcoord + vec2(-.25, 0)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.5, 0.66667));"
+		"    else if(v_texcoord.y > 0.75 && v_texcoord.x >= 0.25 && v_texcoord.x <= 0.75)"
+		"        tex_color = texture(n_box_tex, (v_texcoord + vec2(-0.25, -.75)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.0, 0.66667));"
+		"    else discard;"
+		/*"    vec4 tex_color = texture(n_box_tex, v_texcoord) * .5;//vec4(0.0);\n" // precte texturu krabice
+		"    float f_tex_length = length(v_normal_tex);\n"
+		"    vec3 v_ray = vec3(v_normal_tex, sqrt(1 - f_tex_length));\n"
+		"    if(f_tex_length > 1.0)\n"
+		"        discard;\n"
+		"    vec3 v_ray_abs = abs(v_ray);\n"
+		"    if(v_ray.z > v_ray_abs.x && v_ray.z > v_ray_abs.y)\n"
+		"        tex_color = texture(n_box_tex, ((v_ray.xy / v_ray.z) * .5 + .5) * vec2(0.5, 0.66667) + vec2(0.25, 0.0));\n"
+		"    else if(v_ray_abs.x > v_ray_abs.y) {\n"
+		"        if(v_ray.x < 0)\n"
+		"            tex_color = texture(n_box_tex, ((v_ray.yz / v_ray.x) * vec2(-0.5, -0.5) + vec2(0.5, 0.5)) * vec2(-0.25, -0.66667) + vec2(0.25, 0.66667));\n"
+		"        else\n"
+		"            tex_color = texture(n_box_tex, ((v_ray.yz / v_ray.x) * vec2(-0.5, 0.5) + vec2(0.5, 0.5)) * vec2(0.25, 0.66667) + vec2(0.75, 0.0));\n"
+		"    } else {\n"
+		"        if(v_ray.y < 0)\n"
+		"            tex_color = texture(n_box_tex, ((v_ray.xz / v_ray.y) * vec2(0.5, 0.5) + vec2(0.5, 0.5)) * vec2(-0.5, -0.33333) + vec2(1.0, 1.0));\n"
+		"        else\n"
+		"            tex_color = texture(n_box_tex, ((v_ray.xz / v_ray.y) * vec2(0.5, -0.5) + vec2(0.5, 0.5)) * vec2(0.5, 0.33333) + vec2(0, 0.66667));\n"
+		"    }\n"*/
+		"    frag_color = tex_color;\n"
 		"}\n";
 	// zdrojove kody pro vertex / fragment shader (OpenGL 3 uz nepouziva specifikator 'varying', jinak je kod stejny)
 
@@ -172,7 +195,6 @@ GLuint Shaders::getUserViewProgram() {
 	
 	// nabinduje atributy (propojeni mezi obsahem VBO a vstupem do vertex shaderu)
 	glBindAttribLocation(n_user_program_object, 0, "v_pos");
-	glBindAttribLocation(n_user_program_object, 1, "v_col");
 	glBindAttribLocation(n_user_program_object, 2, "v_tex");
 	
 	// nabinduje vystupni promenou (propojeni mezi framebufferem a vystupem fragment shaderu)
@@ -196,25 +218,21 @@ GLuint Shaders::getPatchViewProgram() {
 		"#version 330\n"		
 		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
 		"in vec3 v_col;\n" // barva vrcholu
-		"in vec2 v_tex;\n" // souradnice textury		
 		"\n"
 		"uniform mat4 t_modelview_projection_matrix;\n" // parametr shaderu - transformacni matice
 		"\n"
 		"out vec3 v_color;\n"		
-		"out vec2 v_texcoord;\n" 		
 		"\n"
 		"void main()\n"
 		"{\n"
 		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
-		"    v_color = v_col;\n"
-		"	 v_texcoord = v_tex;\n"		
+		"    v_color = v_col;\n"	
 		"}\n";
 
 
 	const char *p_s_fragment_shader =
 		"#version 330\n"
 		"in vec3 v_color;\n" // vstupy z vertex shaderu
-		"in vec2 v_texcoord;\n"
 		"\n"
 		"out vec4 frag_color;\n" // vystup do framebufferu
 		"\n"
@@ -244,7 +262,6 @@ GLuint Shaders::getPatchViewProgram() {
 	// nabinduje atributy (propojeni mezi obsahem VBO a vstupem do vertex shaderu)
 	glBindAttribLocation(n_patch_program_object, 0, "v_pos");
 	glBindAttribLocation(n_patch_program_object, 1, "v_col");
-	glBindAttribLocation(n_patch_program_object, 2, "v_tex");
 	
 	// nabinduje vystupni promenou (propojeni mezi framebufferem a vystupem fragment shaderu)
 	glBindFragDataLocation(n_patch_program_object, 0, "frag_color");

@@ -15,7 +15,7 @@
 #include <vld.h> 
 
 // parametr pro subdivision
-#define MAX_PATCH_AREA 0
+#define MAX_PATCH_AREA 1
 
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
@@ -129,6 +129,7 @@ GLuint n_GLTextureFromBitmap(const TBmp *p_bitmap, GLenum n_internal_format = GL
  *	@return vraci true pri uspechu, false pri neuspechu
  */
 bool InitGLObjects() {		
+	//glEnable(GL_CULL_FACE); // not such a good idea
 
 	// vyrobime buffer objekt, do ktereho zkopirujeme geometrii naseho modelu 
 	// (do jednoho bufferu ulozime vsechny souradnice, tzn. texturovaci / normaly / barvy / pozice, atp. 
@@ -346,9 +347,7 @@ bool InitGLObjects() {
 	n_mvp_matrix_uniform = glGetUniformLocation(n_user_program_object, "t_modelview_projection_matrix");
 	n_box_sampler_uniform = glGetUniformLocation(n_user_program_object, "n_box_tex");
 	//n_fire_sampler_uniform = glGetUniformLocation(n_user_program_object, "n_fire_tex");
-	n_time_uniform = glGetUniformLocation(n_user_program_object, "f_time");
-	
-		
+
 	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro pohled z patche
 	n_patch_program_object = Shaders::getPatchViewProgram();	
 	// najde cislo parametru shaderu podle jeho jmena
@@ -379,20 +378,20 @@ bool InitGLObjects() {
 	*/
 
 	// nabindovat pomocne textury k FBO
-	glGenTextures(5, n_patchlook_texture);
-	for (int i=0; i < 5; i++) {		
+	glGenTextures(1, n_patchlook_texture);
+	for (int i=0; i < 1; i++) {		
 		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture[i]);
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);				
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128*4, 128*3, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);				
 	}
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 	// vytvorit FBO pro kresleni pohledu z patchu do textury
 	fbo = new CGLFrameBufferObject(
-		256, 256,
+		128 * 4, 128 * 3,
 		1, true,
 		0, 0,
 		true, false,
@@ -518,7 +517,7 @@ void DrawSquare() {
 	glVertexAttrib3f(1, 0.0, 0.0, 0.0);			
 
 	// vykreslit jednotlive casti s odpovidajicimi texturami (i odpovida Camera::PatchLook)
-	for (int i=0; i < 5; i++) {
+	for (int i=0; i < 1; i++) {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture[i]);		
 		glDrawArrays(GL_TRIANGLES, 6 * i, 6);
@@ -884,17 +883,30 @@ void OnIdle(CGL30Driver &driver)
 	glUseProgram(n_patch_program_object);
 
 	fbo->Bind();
-	glViewport(0, 0, 256, 256);
+	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture[0]);
+
+	glViewport(0, 0, fbo->n_Width(), fbo->n_Height());
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // VYCISTI SPECIFIKOVANY OBDE
+
+	Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,
+		Camera::PATCH_LOOK_LEFT, Camera::PATCH_LOOK_RIGHT, Camera::PATCH_LOOK_FRONT};
+	int p_viewport_list[][4] = {
+		{0, 256, 256, 256},
+		{256, 128, 256, 256},
+		{-128, 0, 256, 256},
+		{384, 0, 256, 256},
+		{128, 0, 256, 256}
+	};
 
 	// celkem 5 pohledu
-	for (int i=0; i < 5; i++) {
-		Camera::PatchLook dir = (Camera::PatchLook)i;
+	for(int i=0; i < 5; i++) {
+		Camera::PatchLook dir = p_patchlook_perm[i];
 
 		// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
 		{
 			// matice perspektivni projekce
 			Matrix4f t_projection;
-			CGLTransform::Perspective(t_projection, 90, float(n_width) / n_height, .01f, 1000);		
+			CGLTransform::Perspective(t_projection, 90, 1.0F, .01f, 1000);		 // RATIO JE 1.0!!!
 		
 			// modelview
 			Matrix4f t_modelview;
@@ -908,19 +920,19 @@ void OnIdle(CGL30Driver &driver)
 			// matice pohledu kamery
 			t_mvp = t_projection * t_modelview;
 		}
-				
+
 		// nahrajeme matici do OpenGL jako parametr shaderu
 		glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
 
 		// vykreslit do textury (pres FBO)		
-		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture[i]);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		
+		glViewport(p_viewport_list[i][0], p_viewport_list[i][1], 256, 256);
+		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // VYCISTI SPECIFIKOVANY OBDE
 		
 		DrawScene();	
-
-		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
 	}
 
+	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
 	fbo->Release();
 	
 
@@ -957,28 +969,29 @@ void OnIdle(CGL30Driver &driver)
 		t_mvp = t_projection * t_modelview;
 	}
 
+	
 	// pouzije shader pro uzivatelsky pohled
-	glUseProgram(n_user_program_object);
+	glUseProgram(n_patch_program_object);
 	
 	// nastavime parametry shaderu (musi se delat pokazde kdyz se shader pouzije)
 	// uniformni parametry se mohou prubezne menit
 	{
 		// nahrajeme matici do OpenGL jako parametr shaderu
-		glUniformMatrix4fv(n_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
-		
-		// nastavime cisla texturovacich jednotek, odkud si shader bude brat textury
-		glUniform1i(n_box_sampler_uniform, 0);
-		//glUniform1i(n_fire_sampler_uniform, 1);
-		
-		// nastavime cas pro animaci
-		glUniform1f(n_time_uniform, f_time);		
+		glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
+				
 	}
 
 	// vykresli scenu
 	DrawScene(); 
 
+	// pouzije shader pro uzivatelsky pohled
+	glUseProgram(n_user_program_object);
 
-	
+	{
+		// nastavime cisla texturovacich jednotek, odkud si shader bude brat textury
+		glUniform1i(n_box_sampler_uniform, 0);
+		//glUniform1i(n_fire_sampler_uniform, 1);
+	}
 
 	// vykresli nahledovy kriz; obsahuje vlastni modelview matici pro fixni pozici na obrazovce
 	DrawSquare(); 
