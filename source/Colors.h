@@ -1,11 +1,10 @@
 
-// pro ucely testovani omezi rozsahy barev pri vnitrnim vykreslovani
-//#define LIMIT_INTERNAL_COLORS
-
-
+#include <crtdbg.h>
 #include <limits>
 #include <cmath>
 #include <algorithm>
+#include <stdint.h>
+#include <math.h>
 
 using namespace std;
 
@@ -13,26 +12,30 @@ using namespace std;
 class Colors {
 
 	private:				
-		static float step[3];	
-		static unsigned int bits[3];
 
-		static float getStep(unsigned int color);
-		static unsigned int getBits(unsigned int color);
+		static short bits[3]; // bitove rozsahy pro kazdou z barev		
+		static short shift[3]; // posun pro vykousnuti barvy z namapovaneho intu
+		static unsigned int mask[3]; // maska pro vykousnuti barvy z namapovaneho intu
 
-		static bool decreaseBits();
-		static unsigned long neededColors;
+		static unsigned int range;
 
 		enum {
 			RED = 0,
 			GREEN,
 			BLUE
 		};
+
+
+		static uint32_t color(size_t colorIndex);
+
 		
 	public:
-		static void setNeededColors(unsigned long colors);
-		static unsigned long getColorRange();
-		static float* getUniqueColors();
-		static float* getIndicesColors();
+		static void setBits(unsigned short r, unsigned short g, unsigned short b);
+		static void setNeededColors(unsigned int colors);
+
+		static unsigned int getColorRange();
+		static uint32_t* getUniqueColors();
+		static uint32_t* getIndicesColors();
 
 };
 
