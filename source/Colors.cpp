@@ -2,7 +2,7 @@
 #include "Colors.h"
 
 
-short Colors::bits[3] = { 8, 8, 8 }; // vychozi hodnota, lze nastavit Colors::setBits
+short Colors::bits[3] = { 10, 10, 10 }; // vychozi hodnota, lze nastavit Colors::setBits
 short Colors::shift[3] = {};
 unsigned int Colors::mask[3] = {};
 
@@ -23,7 +23,9 @@ void Colors::setBits(unsigned short r, unsigned short g, unsigned short b) {
  * Na zaklade pozadovaneho poctu barev nastavi parametry mapovani barev do intu
  */
 void Colors::setNeededColors(unsigned int colors) {
-	
+	++ colors;
+	// cerna neni pouzita
+
 	short m = int( ceil( log((double)colors) / log(2.0) ) ); // potrebny pocet bitu pro ulozeni 'colors' barev
 	_ASSERT( (unsigned int)(1 << m) >= colors);
 	
@@ -31,7 +33,7 @@ void Colors::setNeededColors(unsigned int colors) {
 	short z = totbits - m; // pocet bitu co chceme zahodit	
 
 	// pokud je pozadovany rozsah vyssi nez mame, orizneme jej
-	//if (z < 0) 
+	if (z < 0) 
 		z = 0;
 		
 	// ulozime si rozsah, at pak vime, kolik barev budeme generovat
@@ -55,11 +57,17 @@ void Colors::setNeededColors(unsigned int colors) {
 	mask[GREEN] = MASK32(bits[GREEN] - zg);
 	mask[BLUE] = MASK32(bits[BLUE] - zb);	
 
-	// ted masky a shifty umoznuji vykosunout bity primo z cisla barvy
-	mask[GREEN] <<= bits[RED];
-	mask[BLUE] <<= bits[RED] + bits[GREEN];
-	shift[GREEN] -= bits[RED];
-	shift[BLUE] -= bits[RED] + bits[GREEN];	
+	// ted masky a shifty umoznuji vykosunout bity primo z cisla barvy	
+	mask[GREEN] <<= bits[RED] - zr;
+	mask[BLUE] <<= bits[RED] - zr + bits[GREEN] - zg;
+	shift[GREEN] -= bits[RED] - zr;
+	shift[BLUE] -= bits[RED] - zr + bits[GREEN] - zg;	
+	
+	/*
+	shift[RED] = 0;
+	shift[GREEN] = bits[RED] - (bits[RED] - zr);
+	shift[BLUE] = bits[RED] - (bits[RED] - zr) + bits[GREEN]- (bits[GREEN] - zg);
+	*/
 }
 
 
@@ -77,11 +85,10 @@ unsigned int Colors::getColorRange() {
 
 
 /**
- * Vraci barvu odpovidajiciho cisla (indexovane barvy) mapovanou do 16b unsigned intu
- * Mapovani je zavisle na aktualni hodnote neededColors!
+ * Vraci barvu odpovidajiciho cisla (indexovane barvy) mapovanou do 32b unsigned intu
  */
 uint32_t Colors::color(size_t colorIndex) {
-	return ((colorIndex & mask[RED]) << shift[RED]) | ((colorIndex & mask[GREEN]) << shift[GREEN]) | ((colorIndex & mask[BLUE]) << shift[BLUE]);
+	return ((colorIndex & mask[RED]) << shift[RED]) | ((colorIndex & mask[GREEN]) << shift[GREEN]) | ((colorIndex & mask[BLUE]) << shift[BLUE]);	
 }
 
 
@@ -93,8 +100,8 @@ uint32_t* Colors::getUniqueColors() {
 	unsigned int range = getColorRange();
 	uint32_t* colors = new uint32_t[range]; // 1 hodnota = 1 barva obsahujici zabalene 3 slozky
 	
-	for (unsigned int i = 1; i < range + 1; i++)
-		colors[i-1] = color(i);
+	for (unsigned int i = 0; i < range; i++)
+		colors[i] = color(i+1);
 
 	return colors;
 }

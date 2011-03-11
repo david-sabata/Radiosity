@@ -13,7 +13,7 @@
 #include <vld.h> 
 
 // parametr pro subdivision
-#define MAX_PATCH_AREA 0.1
+#define MAX_PATCH_AREA 0
 
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
@@ -292,11 +292,11 @@ bool InitGLObjects() {
 			glBindBuffer(GL_ARRAY_BUFFER, n_vertex_buffer_object);
 			glEnableVertexAttribArray(0);
 			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(3 * 4 * patchIntervals[i].from * sizeof(float)));
-
+			
 			// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva ma 3 hodnoty,		
 			glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);
 			glEnableVertexAttribArray(1);
-			glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, GL_FALSE, 0, p_OffsetInVBO(0));
+			glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
 
 			// rekneme OpenGL odkud bude brat indexy geometrie pro glDrawElements
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, n_index_buffer_object);		
@@ -313,13 +313,13 @@ bool InitGLObjects() {
 	const char *p_s_vertex_shader =
 		"#version 330\n"		
 		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
-		"in vec3 v_col;\n" // barva vrcholu
+		"in vec4 v_col;\n" // barva vrcholu
 		"\n"
 		"uniform float f_time;\n" // parametr shaderu - cas pro animovani
 		"\n"
 		"uniform mat4 t_modelview_projection_matrix;\n" // parametr shaderu - transformacni matice
 		"\n"
-		"out vec3 v_color;\n"
+		"out vec4 v_color;\n"
 		/*
 		"out vec2 v_texcoord;\n" 
 		"out vec2 v_texcoord1;\n" 
@@ -331,7 +331,8 @@ bool InitGLObjects() {
 		"{\n"
 		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
 		//"	 v_color = vec3(abs(sin(v_pos.x)), abs(sin(v_pos.y)), abs(sin(v_pos.z)) );\n"
-		"    v_color = v_col;\n"
+		//"    v_color = vec4(v_col.x/1024.0, 0.0, 0.0, 1.0);\n"
+		"    v_color = v_col / 1024.0;\n"
 		/*
 		"    v_texcoord = v_tex;\n" // zkopirujeme souradnice textury pro fragment shader
 		"    v_texcoord1 = v_tex + vec2(sin(f_time), f_time);\n"
@@ -343,7 +344,7 @@ bool InitGLObjects() {
 
 	const char *p_s_fragment_shader =
 		"#version 330\n"
-		"in vec3 v_color;\n" // vstupy z vertex shaderu
+		"in vec4 v_color;\n" // vstupy z vertex shaderu
 		"\n"
 		"out vec4 frag_color;\n" // vystup do framebufferu
 		"\n"
@@ -351,7 +352,8 @@ bool InitGLObjects() {
 		"\n"
 		"void main()\n"
 		"{\n"
-		"    frag_color = vec4(v_color, 1.0f);\n"
+		//"    frag_color = vec4(v_color, 1.0f);\n"
+		"    frag_color = v_color;\n"
 		/*
 		"    vec4 box_color = texture2D(n_box_tex, v_texcoord);\n" // precte texturu krabice
 		"    vec4 fire_color = texture2D(n_fire_tex, v_texcoord1) +\n"
@@ -490,11 +492,20 @@ void DrawScene() {
 	} else {
 		// vykresli vse barevne (s moznym opakovanim barev)		
 		unsigned int* colors = Colors::getUniqueColors();
-		
+		/*	
 		for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
 			glBindVertexArray(n_color_array_object[i]);			
 			//glVertexAttrib3f(1, colors[3 * i], colors[3 * i + 1], colors[3 * i + 2]);			
 			glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, colors[i]);
+			int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);	
+			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));
+		}
+		*/
+
+		for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
+			glBindVertexArray(n_color_array_object[i]);			
+			//glVertexAttrib3f(1, colors[3 * i], colors[3 * i + 1], colors[3 * i + 2]);			
+			//glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, colors[i]);
 			int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);	
 			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));
 		}
