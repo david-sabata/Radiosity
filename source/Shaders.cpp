@@ -9,6 +9,10 @@ GLuint Shaders::n_patch_vertex_shader = 0;
 GLuint Shaders::n_patch_fragment_shader = 0;
 GLuint Shaders::n_patch_program_object = 0;
 
+GLuint Shaders::n_preview_vertex_shader = 0;
+GLuint Shaders::n_preview_fragment_shader = 0;
+GLuint Shaders::n_preview_program_object = 0;
+
 /**
  *	@brief zkontroluje zda byl shader spravne zkompilovan, tiskne chyby do stderr
  *	@param[in] n_shader_object je id shaderu
@@ -104,14 +108,22 @@ void Shaders::cleanup() {
 	glDeleteShader(n_user_vertex_shader);
 	glDeleteShader(n_user_fragment_shader);
 	glDeleteProgram(n_user_program_object);
+
+	glDeleteShader(n_patch_vertex_shader);
+	glDeleteShader(n_patch_fragment_shader);
+	glDeleteProgram(n_patch_program_object);
+
+	glDeleteShader(n_preview_vertex_shader);
+	glDeleteShader(n_preview_fragment_shader);
+	glDeleteProgram(n_preview_program_object);
 }
 
 
 
 /**
- * Vraci program (zkompilovane shadery) pro renderovani uzivatelskeho pohledu
+ * Vraci program (zkompilovane shadery) pro renderovani nahledoveho krize
  */
-GLuint Shaders::getUserViewProgram() {
+GLuint Shaders::getPreviewProgram() {
 	const char *p_s_vertex_shader =
 		"#version 330\n"		
 		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
@@ -135,77 +147,76 @@ GLuint Shaders::getUserViewProgram() {
 		"\n"
 		"out vec4 frag_color;\n" // vystup do framebufferu
 		"\n"
-		"uniform sampler2D n_box_tex;\n"
+		"uniform sampler2D n_tex;\n"
 		"\n"
 		"void main()\n"
 		"{\n"
 		"    vec4 tex_color = vec4(0.0);"
 		"    if(v_texcoord.y >= 0.25 && v_texcoord.y <= 0.75) {"
 		"        if(v_texcoord.x < 0.25)"
-		"            tex_color = texture(n_box_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.25/0.25, 0.66667/0.5));"
+		"            tex_color = texture(n_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.25/0.25, 0.66667/0.5));"
 		"        else if(v_texcoord.x < 0.75)"
-		"            tex_color = texture(n_box_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.5/0.5, 0.66667/0.5));"
+		"            tex_color = texture(n_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.5/0.5, 0.66667/0.5));"
 		"        else"
-		"            tex_color = texture(n_box_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.25/0.25, 0.66667/0.5));"
+		"            tex_color = texture(n_tex, (v_texcoord + vec2(0, -.25)) * vec2(0.25/0.25, 0.66667/0.5));"
 		"    } else if(v_texcoord.y < 0.25 && v_texcoord.x >= 0.25 && v_texcoord.x <= 0.75)"
-		"        tex_color = texture(n_box_tex, (v_texcoord + vec2(-.25, 0)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.5, 0.66667));"
+		"        tex_color = texture(n_tex, (v_texcoord + vec2(-.25, 0)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.5, 0.66667));"
 		"    else if(v_texcoord.y > 0.75 && v_texcoord.x >= 0.25 && v_texcoord.x <= 0.75)"
-		"        tex_color = texture(n_box_tex, (v_texcoord + vec2(-0.25, -.75)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.0, 0.66667));"
+		"        tex_color = texture(n_tex, (v_texcoord + vec2(-0.25, -.75)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.0, 0.66667));"
 		"    else discard;"
-		/*"    vec4 tex_color = texture(n_box_tex, v_texcoord) * .5;//vec4(0.0);\n" // precte texturu krabice
+		/*"    vec4 tex_color = texture(n_tex, v_texcoord) * .5;//vec4(0.0);\n" // precte texturu krabice
 		"    float f_tex_length = length(v_normal_tex);\n"
 		"    vec3 v_ray = vec3(v_normal_tex, sqrt(1 - f_tex_length));\n"
 		"    if(f_tex_length > 1.0)\n"
 		"        discard;\n"
 		"    vec3 v_ray_abs = abs(v_ray);\n"
 		"    if(v_ray.z > v_ray_abs.x && v_ray.z > v_ray_abs.y)\n"
-		"        tex_color = texture(n_box_tex, ((v_ray.xy / v_ray.z) * .5 + .5) * vec2(0.5, 0.66667) + vec2(0.25, 0.0));\n"
+		"        tex_color = texture(n_tex, ((v_ray.xy / v_ray.z) * .5 + .5) * vec2(0.5, 0.66667) + vec2(0.25, 0.0));\n"
 		"    else if(v_ray_abs.x > v_ray_abs.y) {\n"
 		"        if(v_ray.x < 0)\n"
-		"            tex_color = texture(n_box_tex, ((v_ray.yz / v_ray.x) * vec2(-0.5, -0.5) + vec2(0.5, 0.5)) * vec2(-0.25, -0.66667) + vec2(0.25, 0.66667));\n"
+		"            tex_color = texture(n_tex, ((v_ray.yz / v_ray.x) * vec2(-0.5, -0.5) + vec2(0.5, 0.5)) * vec2(-0.25, -0.66667) + vec2(0.25, 0.66667));\n"
 		"        else\n"
-		"            tex_color = texture(n_box_tex, ((v_ray.yz / v_ray.x) * vec2(-0.5, 0.5) + vec2(0.5, 0.5)) * vec2(0.25, 0.66667) + vec2(0.75, 0.0));\n"
+		"            tex_color = texture(n_tex, ((v_ray.yz / v_ray.x) * vec2(-0.5, 0.5) + vec2(0.5, 0.5)) * vec2(0.25, 0.66667) + vec2(0.75, 0.0));\n"
 		"    } else {\n"
 		"        if(v_ray.y < 0)\n"
-		"            tex_color = texture(n_box_tex, ((v_ray.xz / v_ray.y) * vec2(0.5, 0.5) + vec2(0.5, 0.5)) * vec2(-0.5, -0.33333) + vec2(1.0, 1.0));\n"
+		"            tex_color = texture(n_tex, ((v_ray.xz / v_ray.y) * vec2(0.5, 0.5) + vec2(0.5, 0.5)) * vec2(-0.5, -0.33333) + vec2(1.0, 1.0));\n"
 		"        else\n"
-		"            tex_color = texture(n_box_tex, ((v_ray.xz / v_ray.y) * vec2(0.5, -0.5) + vec2(0.5, 0.5)) * vec2(0.5, 0.33333) + vec2(0, 0.66667));\n"
+		"            tex_color = texture(n_tex, ((v_ray.xz / v_ray.y) * vec2(0.5, -0.5) + vec2(0.5, 0.5)) * vec2(0.5, 0.33333) + vec2(0, 0.66667));\n"
 		"    }\n"*/
 		"    frag_color = tex_color;\n"
 		"}\n";
-	// zdrojove kody pro vertex / fragment shader (OpenGL 3 uz nepouziva specifikator 'varying', jinak je kod stejny)
 
 
 	// zkompiluje vertex / fragment shader, pripoji je k programu
-	n_user_vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(n_user_vertex_shader, 1, &p_s_vertex_shader, NULL);
-	glCompileShader(n_user_vertex_shader);
-	if(!CheckShader(n_user_vertex_shader, "vertex shader"))
+	n_preview_vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(n_preview_vertex_shader, 1, &p_s_vertex_shader, NULL);
+	glCompileShader(n_preview_vertex_shader);
+	if(!CheckShader(n_preview_vertex_shader, "vertex shader"))
 		return false;
 
-	n_user_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(n_user_fragment_shader, 1, &p_s_fragment_shader, NULL);
-	glCompileShader(n_user_fragment_shader);
-	if(!CheckShader(n_user_fragment_shader, "fragment shader"))
+	n_preview_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(n_preview_fragment_shader, 1, &p_s_fragment_shader, NULL);
+	glCompileShader(n_preview_fragment_shader);
+	if(!CheckShader(n_preview_fragment_shader, "fragment shader"))
 		return false;
 	
-	n_user_program_object = glCreateProgram();
-	glAttachShader(n_user_program_object, n_user_vertex_shader);
-	glAttachShader(n_user_program_object, n_user_fragment_shader);
+	n_preview_program_object = glCreateProgram();
+	glAttachShader(n_preview_program_object, n_preview_vertex_shader);
+	glAttachShader(n_preview_program_object, n_preview_fragment_shader);
 	
 	// nabinduje atributy (propojeni mezi obsahem VBO a vstupem do vertex shaderu)
-	glBindAttribLocation(n_user_program_object, 0, "v_pos");
-	glBindAttribLocation(n_user_program_object, 2, "v_tex");
+	glBindAttribLocation(n_preview_program_object, 0, "v_pos");
+	glBindAttribLocation(n_preview_program_object, 2, "v_tex");
 	
 	// nabinduje vystupni promenou (propojeni mezi framebufferem a vystupem fragment shaderu)
-	glBindFragDataLocation(n_user_program_object, 0, "frag_color");
+	glBindFragDataLocation(n_preview_program_object, 0, "frag_color");
 	
 	// slinkuje program
-	glLinkProgram(n_user_program_object);
-	if(!CheckProgram(n_user_program_object, "program"))
+	glLinkProgram(n_preview_program_object);
+	if(!CheckProgram(n_preview_program_object, "program"))
 		return false;
 	else
-		return n_user_program_object;
+		return n_preview_program_object;
 }
 
 
@@ -226,7 +237,7 @@ GLuint Shaders::getPatchViewProgram() {
 		"void main()\n"
 		"{\n"
 		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
-		"    v_color = v_col;\n"	
+		"    v_color = v_col / 1024.0;\n"
 		"}\n";
 
 
@@ -272,4 +283,70 @@ GLuint Shaders::getPatchViewProgram() {
 		return false;
 	else
 		return n_patch_program_object;
+}
+
+
+
+/**
+ * Vraci program (zkompilovane shadery) pro renderovani uzivatelskeho pohledu
+ */
+GLuint Shaders::getUserViewProgram() {
+	const char *p_s_vertex_shader =
+		"#version 330\n"		
+		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
+		"in vec3 v_col;\n" // barva vrcholu
+		"\n"
+		"uniform mat4 t_modelview_projection_matrix;\n" // parametr shaderu - transformacni matice
+		"\n"
+		"out vec3 v_color;\n"		
+		"\n"
+		"void main()\n"
+		"{\n"
+		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
+		"    v_color = v_col / 1024.0;\n"
+		"}\n";
+
+
+	const char *p_s_fragment_shader =
+		"#version 330\n"
+		"in vec3 v_color;\n" // vstupy z vertex shaderu
+		"\n"
+		"out vec4 frag_color;\n" // vystup do framebufferu
+		"\n"
+		"void main()\n"
+		"{\n"
+		"    frag_color = vec4(v_color, 1.0f);\n"
+		"}\n";
+
+
+	// zkompiluje vertex / fragment shader, pripoji je k programu
+	n_user_vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(n_user_vertex_shader, 1, &p_s_vertex_shader, NULL);
+	glCompileShader(n_user_vertex_shader);
+	if(!CheckShader(n_user_vertex_shader, "vertex shader"))
+		return false;
+
+	n_user_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(n_user_fragment_shader, 1, &p_s_fragment_shader, NULL);
+	glCompileShader(n_user_fragment_shader);
+	if(!CheckShader(n_user_fragment_shader, "fragment shader"))
+		return false;
+	
+	n_user_program_object = glCreateProgram();
+	glAttachShader(n_user_program_object, n_user_vertex_shader);
+	glAttachShader(n_user_program_object, n_user_fragment_shader);
+	
+	// nabinduje atributy (propojeni mezi obsahem VBO a vstupem do vertex shaderu)
+	glBindAttribLocation(n_user_program_object, 0, "v_pos");
+	glBindAttribLocation(n_user_program_object, 1, "v_col");
+	
+	// nabinduje vystupni promenou (propojeni mezi framebufferem a vystupem fragment shaderu)
+	glBindFragDataLocation(n_user_program_object, 0, "frag_color");
+	
+	// slinkuje program
+	glLinkProgram(n_user_program_object);
+	if(!CheckProgram(n_user_program_object, "program"))
+		return false;
+	else
+		return n_user_program_object;
 }

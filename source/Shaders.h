@@ -9,6 +9,7 @@ class Shaders {
 	public:
 		static GLuint getUserViewProgram();
 		static GLuint getPatchViewProgram();
+		static GLuint getPreviewProgram();
 		static void cleanup();
 
 	private:
@@ -17,5 +18,6 @@ class Shaders {
 
 		static GLuint n_user_vertex_shader, n_user_fragment_shader, n_user_program_object;
 		static GLuint n_patch_vertex_shader, n_patch_fragment_shader, n_patch_program_object;
+		static GLuint n_preview_vertex_shader, n_preview_fragment_shader, n_preview_program_object;
 };
 

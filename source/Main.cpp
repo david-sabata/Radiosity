@@ -12,6 +12,7 @@
 #include "Colors.h"
 #include "FrameBuffer.h"
 #include "Shaders.h"
+#include "Timer.h"
 #include <vld.h> 
 
 // parametr pro subdivision
@@ -28,22 +29,24 @@ static int n_height = 600;
 static bool b_running = true;
 // flag pro vyskoceni ze smycky zprav
 
+HWND h_wnd;
+// okno
+
 void OnIdle(CGL30Driver &driver);
 void onResize(int n_x, int n_y, int n_new_width, int n_new_height);
 LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_param);
 // prototypy funkci
 
-static GLuint n_box_texture, n_fire_texture;
-
-static GLuint n_patchlook_texture[5];
+static GLuint n_patchlook_texture;
 
 static GLuint n_vertex_buffer_object, n_index_buffer_object, n_vertex_array_object, n_tex_buffer_object,
 	n_vbo_square, n_vao_square;
 
-static GLuint n_user_program_object, n_mvp_matrix_uniform,
-	n_box_sampler_uniform, n_fire_sampler_uniform, n_time_uniform;
+static GLuint n_user_program_object, n_user_mvp_matrix_uniform, n_box_sampler_uniform;
 
 static GLuint n_patch_program_object, n_patchprogram_mvp_matrix_uniform;
+
+static GLuint n_preview_program_object, n_preview_mvp_matrix_uniform;
 
 static GLuint n_color_buffer_object;
 static GLuint* n_color_array_object = NULL; // pole VAO pro kazdy interval vykreslovanych patchu
@@ -87,6 +90,10 @@ typedef struct {
 // intervaly patchu ve VBO po kterych se vykresluje - jen poradova cisla patchu
 // inicializuji se v InitGlObjects
 static vector<interval> patchIntervals; 
+
+// pro mereni fps
+static CTimer timer;
+static double f_frame_time_average = 0;
 
 
 
@@ -335,12 +342,10 @@ bool InitGLObjects() {
 
 
 	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro uzivatelsky pohled
-	n_user_program_object = Shaders::getUserViewProgram();
-	
+	n_user_program_object = Shaders::getUserViewProgram();		
 	// najde cislo parametru shaderu podle jeho jmena
-	n_mvp_matrix_uniform = glGetUniformLocation(n_user_program_object, "t_modelview_projection_matrix");
-	n_box_sampler_uniform = glGetUniformLocation(n_user_program_object, "n_box_tex");
-	//n_fire_sampler_uniform = glGetUniformLocation(n_user_program_object, "n_fire_tex");
+	n_user_mvp_matrix_uniform = glGetUniformLocation(n_user_program_object, "t_modelview_projection_matrix");
+	
 
 	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro pohled z patche
 	n_patch_program_object = Shaders::getPatchViewProgram();	
@@ -348,41 +353,25 @@ bool InitGLObjects() {
 	n_patchprogram_mvp_matrix_uniform = glGetUniformLocation(n_patch_program_object, "t_modelview_projection_matrix");
 	
 
+	// ziskat slinkovany a zkontrolovany program pro vykresleni nahledoveho krize
+	n_preview_program_object = Shaders::getPreviewProgram();
+	// najde cislo parametru shaderu podle jeho jmena
+	n_preview_mvp_matrix_uniform = glGetUniformLocation(n_preview_program_object, "t_modelview_projection_matrix");
+	// najde cislo texturovaciho parametru
+	n_box_sampler_uniform = glGetUniformLocation(n_preview_program_object, "n_tex");
 
-	/*
-	// nahraje obrazky
-	TBmp *p_box; //, *p_fire;
-	if(!(p_box = CTgaCodec::p_Load_TGA("box.tga"))) {
-		fprintf(stderr, "error: failed to load \'box.tga\'\n");
-		return false;
-	}
-	if(!(p_fire = CTgaCodec::p_Load_TGA("fire.tga"))) {
-		p_box->Delete();
-		fprintf(stderr, "error: failed to load \'fire.tga\'\n");
-		return false;
-	}
-	
-	// vyrobi z nich textury
-	n_box_texture = n_GLTextureFromBitmap(p_box, GL_RGBA8);
-	n_fire_texture = n_GLTextureFromBitmap(p_fire, GL_RGB8);
-	
-	// uvolni pamet
-	p_box->Delete();
-	p_fire->Delete();
-	*/
-
-	// nabindovat pomocne textury k FBO
-	glGenTextures(1, n_patchlook_texture);
-	for (int i=0; i < 1; i++) {		
-		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture[i]);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128*4, 128*3, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);				
-	}
+	// nabindovat pomocnou texturu k FBO
+	glGenTextures(1, &n_patchlook_texture);
+	glBindTexture(GL_TEXTURE_2D, n_patchlook_texture);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128*4, 128*3, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);				
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
+
+
 	// vytvorit FBO pro kresleni pohledu z patchu do textury
 	fbo = new CGLFrameBufferObject(
 		128 * 4, 128 * 3,
@@ -392,17 +381,12 @@ bool InitGLObjects() {
 		GL_DEPTH_COMPONENT24, 0,
 		false, false, 0, 0);
 
-	cout << "FBO init status " << fbo->b_Status() << endl;
-	//cout << "FBO bind " << fbo->Bind() << endl;	
+	if (fbo->b_Status() == false) {
+		cerr << "Unable to create FBO" << endl;
+		return false;
+	}
 	
-	/*
-	for (int i=0; i < 5; i++)
-		cout << "FBO bind texture " << i << ": " << fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture[i]) << endl;
 
-	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
-	*/
-
-	//cout << "FBO release " << fbo->Release() << endl;
 	
 	return true;
 }
@@ -422,9 +406,7 @@ void CleanupGLObjects()
 	Shaders::cleanup();
 	// smaze shadery		
 
-	glDeleteTextures(1, &n_box_texture);
-	//glDeleteTextures(1, &n_fire_texture);
-	glDeleteTextures(5, n_patchlook_texture);
+	glDeleteTextures(1, &n_patchlook_texture);
 	// smaze textury
 
 	delete fbo;
@@ -515,17 +497,15 @@ void DrawSquare() {
 	t_mvp.Scale(0.25);
 	t_mvp.Translate(-1.0, -1.0, 0);
 	
-	glUniformMatrix4fv(n_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
+	glUniformMatrix4fv(n_preview_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
 
 	glBindVertexArray(n_vao_square);			
 	glVertexAttrib3f(1, 0.0, 0.0, 0.0);			
 
 	// vykreslit jednotlive casti s odpovidajicimi texturami (i odpovida Camera::PatchLook)
-	for (int i=0; i < 1; i++) {
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture[i]);		
-		glDrawArrays(GL_TRIANGLES, 6 * i, 6);
-	}
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, n_patchlook_texture);		
+	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	// zrusit bind textury
 	glBindTexture(GL_TEXTURE_2D, 0);
@@ -566,7 +546,6 @@ int main(int n_arg_num, const char **p_arg_list)
 	int n_wnd_height = t_rect.bottom - t_rect.top;	
 
 	// vyrobi a ukaze okno
-	HWND h_wnd;
 	h_wnd = CreateWindow(p_s_class_name, p_s_window_name, WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, n_wnd_width, n_wnd_height, NULL, NULL, GetModuleHandle(NULL), NULL);
 	ShowWindow(h_wnd, SW_SHOW);
@@ -865,6 +844,10 @@ void handleActiveKeys() {
  */
 void OnIdle(CGL30Driver &driver)
 {
+	// spustit stopky fps
+	double t_start = timer.f_Time();
+
+
 	// vycistime framebuffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
@@ -887,13 +870,14 @@ void OnIdle(CGL30Driver &driver)
 	glUseProgram(n_patch_program_object);
 
 	fbo->Bind();
-	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture[0]);
+	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
 
 	glViewport(0, 0, fbo->n_Width(), fbo->n_Height());
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // VYCISTI SPECIFIKOVANY OBDE
 
 	Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,
 		Camera::PATCH_LOOK_LEFT, Camera::PATCH_LOOK_RIGHT, Camera::PATCH_LOOK_FRONT};
+
 	int p_viewport_list[][4] = {
 		{0, 256, 256, 256},
 		{256, 128, 256, 256},
@@ -948,14 +932,6 @@ void OnIdle(CGL30Driver &driver)
 	// obonvit vychozi rozmer viewportu
 	glViewport(0, 0, n_width, n_height);
 
-	// nastavime textury (do prvni texturovaci jednotky da texturu krabice, do druhou da texturu ohne)		
-	/*
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, n_box_texture);				
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, n_fire_texture); // opet - zadne enable / disable GL_TEXTURE_2D
-	*/
-
 	// nove nastavit modelview matici, tentokrat pro uzivatelsky (volny) pohled
 	{
 		// matice perspektivni projekce
@@ -975,26 +951,26 @@ void OnIdle(CGL30Driver &driver)
 
 	
 	// pouzije shader pro uzivatelsky pohled
-	glUseProgram(n_patch_program_object);
+	glUseProgram(n_user_program_object);
 	
 	// nastavime parametry shaderu (musi se delat pokazde kdyz se shader pouzije)
 	// uniformni parametry se mohou prubezne menit
 	{
 		// nahrajeme matici do OpenGL jako parametr shaderu
-		glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
+		glUniformMatrix4fv(n_user_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);
 				
 	}
 
 	// vykresli scenu
 	DrawScene(); 
 
-	// pouzije shader pro uzivatelsky pohled
-	glUseProgram(n_user_program_object);
+
+	// pouzije shader pro nahledovy kriz
+	glUseProgram(n_preview_program_object);
 
 	{
 		// nastavime cisla texturovacich jednotek, odkud si shader bude brat textury
 		glUniform1i(n_box_sampler_uniform, 0);
-		//glUniform1i(n_fire_sampler_uniform, 1);
 	}
 
 	// vykresli nahledovy kriz; obsahuje vlastni modelview matici pro fixni pozici na obrazovce
@@ -1005,4 +981,13 @@ void OnIdle(CGL30Driver &driver)
 
 	// preklopi buffery, zobrazi co jsme nakreslili
 	driver.Blit(); 
+
+
+	// spocitat fps
+	glFinish();
+	f_frame_time_average = f_frame_time_average * .9 + (timer.f_Time() - t_start) * .1;
+	double f_fps = 1 / f_frame_time_average;
+	ostringstream winTitle;
+	winTitle << p_s_window_name << ", FPS: " << f_fps;
+	SetWindowText(h_wnd, winTitle.str().c_str());
 }
