@@ -22,7 +22,8 @@ PrimitiveModel::PrimitiveModel(int type) {
 				Vector3f vec3 = Vector3f(2.130f, 5.485f, 3.320f);
 				Vector3f vec4 = Vector3f(2.130f, 5.485f, 2.270f);
 				Color4f col = Color4f(1.0f, 1.0f, 1.0f, 1.0f);
-				patches->push_back( new Patch(vec1, vec2, vec3, vec4, col) );
+				Color4f energy = Color4f(1.0f, 1.0f, 1.0f, 1.0f);
+				patches->push_back( new Patch(vec1, vec2, vec3, vec4, col, energy) );
 			}
 			break;
 		case CUBE:

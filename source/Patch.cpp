@@ -8,13 +8,23 @@ Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4) {
 	Patch::vec4 = vec4;
 }
 
-Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f energy) {
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f color) {
 	Patch::vec1 = vec1;
 	Patch::vec2 = vec2;
 	Patch::vec3 = vec3;
 	Patch::vec4 = vec4;
+	Patch::color = color;
+}
+
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f color, Color4f energy) {
+	Patch::vec1 = vec1;
+	Patch::vec2 = vec2;
+	Patch::vec3 = vec3;
+	Patch::vec4 = vec4;
+	Patch::color = color;
 	Patch::energy = energy;
 }
+
 
 Patch::~Patch(void) {
 }
@@ -74,10 +84,10 @@ vector<Patch*>* Patch::divide(double area) {
 
 	vector<Patch*>* patches = new vector<Patch*>;
 
-	patches->push_back( new Patch(A, AB, E, DA) );
-	patches->push_back( new Patch(AB, B, BC, E) );
-	patches->push_back( new Patch(BC, C, CD, E) );
-	patches->push_back( new Patch(CD, D, DA, E) );
+	patches->push_back( new Patch(A, AB, E, DA, this->color, this->energy) );
+	patches->push_back( new Patch(AB, B, BC, E, this->color, this->energy) );
+	patches->push_back( new Patch(BC, C, CD, E, this->color, this->energy) );
+	patches->push_back( new Patch(CD, D, DA, E, this->color, this->energy) );
 
 	//cout << "====================" << endl;
 
