@@ -16,7 +16,7 @@
 #include <vld.h> 
 
 // parametr pro subdivision
-#define MAX_PATCH_AREA 1
+#define MAX_PATCH_AREA 0
 
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
@@ -55,7 +55,7 @@ static GLuint* n_color_array_object = NULL; // pole VAO pro kazdy interval vykre
 
 // citlivosti / rychlosti pohybu
 static float mouse_sensitivity = 0.001f;
-static float keys_sensitivity = 0.004f;
+static float walk_speed = 2.5f;
 
 // je mys ovladana programem? (v pripade nastavovani pozice mysi nechceme odchytavat eventy)
 static bool b_mouse_controlled = false;
@@ -829,9 +829,13 @@ void handleActiveKeys() {
 	bool d_down = HIBYTE(GetKeyState(KEY_D)) & 0x01;
 	bool w_down = HIBYTE(GetKeyState(KEY_W)) & 0x01;
 
+	// chceme aby byla rychlost pohybu nezavisla na fps
+	float f_fps = float(1 / f_frame_time_average);
+	float f_step = float(walk_speed / f_fps);
+
 	// vysledkem jsou slozky vektoru ve smerech X ("strafe", ne otaceni) a Z
-	float x = -( (-1.0f * a_down) + (1.0f * d_down) ) * keys_sensitivity;	
-	float z = ( (-1.0f * s_down) + (1.0f * w_down) ) * keys_sensitivity;		
+	float x = -( (-1.0f * a_down) + (1.0f * d_down) ) * f_step;	
+	float z = ( (-1.0f * s_down) + (1.0f * w_down) ) * f_step;		
 	
 	cam.Move(x, 0.0f, z);
 
