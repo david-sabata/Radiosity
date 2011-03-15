@@ -27,5 +27,10 @@ class PrimitiveModel : public Model {
 		static const int roomIndices[];
 		static const int cubeIndices[];
 		static const int blockIndices[];
+
+		// barvy materialu - vzdy jedna (tri floaty) barva pro ctyri po sobe jdouci vrcholy
+		static const float roomColors[];
+		static const float cubeColors[];
+		static const float blockColors[];
 };
 
