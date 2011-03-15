@@ -26,10 +26,10 @@ class Patch {
 
 	protected:
 		Vector3f vec1, vec2, vec3, vec4;
-		Color4f color;
+		Color4f color;		// vychozi barva povrchu - pouzita pro color bleeding
 		Color4f radiosity;	// radiozita - zarivost povrchu
-		Color4f energy;		// take emissivity - vlastni zarivost plosky
-		Color4f reflectivity;	// odrazivost plosky
+		Color4f energy;		// take emissivity - vlastni zarivost plosky (pouze svetla)
+		Color4f reflectivity;	// odrazivost plosky - pro vypocet kolik energie se pohlti/odrazi
 		
 };
 

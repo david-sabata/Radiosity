@@ -63,8 +63,11 @@ static bool b_mouse_controlled = false;
 // aliasy pro virtual-keys
 #define KEY_A 0x41
 #define KEY_D 0x44
+#define KEY_L 0x4C
+#define KEY_P 0x50
 #define KEY_S 0x53
 #define KEY_W 0x57
+
 
 // objekty kamery
 Camera cam; // uzivatelsky pohled
@@ -79,8 +82,14 @@ unsigned long lookFromPatch = 0;
 Camera::PatchLook lookFromPatchDir = Camera::PATCH_LOOK_FRONT;
 CGLFrameBufferObject* fbo = NULL;
 
-// zobrazit pouze wireframe?
+// spustit/pozastavit vypocet (L)
+bool computeRadiosity = false;
+
+// zobrazit pouze wireframe? (F)
 bool wireframe = false;
+
+// zobrazit nahledovy kriz? (P)
+bool showPatchLook = false;
 
 // polozka intervalu patchu
 typedef struct { 
@@ -670,7 +679,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 				if (n_w_param == VK_ESCAPE || n_w_param == 0x51)
 					SendMessage(h_wnd, WM_CLOSE, 0, 0);
 				
-				// e
+				// E
 				if (n_w_param == 0x45) {
 					cout << "patch cam: " << endl;
 					patchCam.DebugDump();
@@ -678,7 +687,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 					cam.DebugDump();
 				}
 
-				// f
+				// F
 				if (n_w_param == 0x46) {
 					if (wireframe) {
 						glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
@@ -689,13 +698,13 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 					}
 				}
 
-				// x
+				// X
 				if (n_w_param == 0x58) {					
 					step++;
 					printf("step: %i\n", step);
 				}
 
-				// y
+				// Y
 				if (n_w_param == 0x59) {
 					step--;
 					if (step < 0)
@@ -703,32 +712,32 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 					printf("step: %i\n", step);
 				}
 
+				// P
+				if (n_w_param == KEY_P) 
+					showPatchLook = !showPatchLook;
+
+				// L
+				if (n_w_param == KEY_L) {
+					computeRadiosity = !computeRadiosity;
+					if (computeRadiosity)
+						cout << "Light emitting continues" << endl;
+					else
+						cout << "Light emitting paused" << endl;
+				}
+
 				// pgUp
 				if (n_w_param == 0x21) {
 					if (lookFromPatch+1 < scene.getPatchesCount()) {
 						lookFromPatch++;
-						/*
-						Patch p = scene.getPatch(lookFromPatch);
-						vector<float> vs = p.getVerticesCoords();
-						Vector3f no = p.getNormal(); no.Normalize();
-						Vector3f ce = p.getCenter();
-						cout << "----------------------------" << endl;
-						cout << "vec1: " << setw(8) << vs[0] << "\t" << setw(8) << vs[1] << "\t" << setw(8) << vs[2] << endl;
-						cout << "vec2: " << setw(8) << vs[3] << "\t" << setw(8) << vs[4] << "\t" << setw(8) << vs[5] << endl;
-						cout << "vec3: " << setw(8) << vs[6] << "\t" << setw(8) << vs[7] << "\t" << setw(8) << vs[8] << endl;
-						cout << "vec4: " << setw(8) << vs[9] << "\t" << setw(8) << vs[10] << "\t" << setw(8) << vs[11] << endl;
-						cout << "norm: " << setw(8) << no[0] << "\t" << setw(8) << no[1] << "\t" << setw(8) << no[2] << endl;
-						cout << "cntr: " << setw(8) << ce[0] << "\t" << setw(8) << ce[1] << "\t" << setw(8) << ce[2] << endl;
-						*/
 					}
-					printf("looking from patch: %lu\n", lookFromPatch); // posunute cislovani
+					printf("looking from patch: %lu\n", lookFromPatch);
 				}
 				// pgDown
 				if (n_w_param == 0x22) {
 					if (lookFromPatch > 0) {
 						lookFromPatch--;						
 					}
-					printf("looking from patch: %lu\n", lookFromPatch); // posunute cislovani
+					printf("looking from patch: %lu\n", lookFromPatch);
 				}
 				// up
 				if (n_w_param == 0x26) {
@@ -829,7 +838,11 @@ void handleActiveKeys() {
 	// R - reset kamery
 	if (HIBYTE(GetKeyState(0x52)) & 0x01)
 		cam.Reset();
-
+	/*
+	// P - zobrazit/skryt nahledovy kriz
+	if (HIBYTE(GetKeyState(KEY_P)) & 0x01)
+		showPatchLook = !showPatchLook;
+	*/
 	/*
 	// X - provest krok
 	if (HIBYTE(GetKeyState(0x58)) & 0x01)
@@ -965,16 +978,18 @@ void OnIdle(CGL30Driver &driver)
 	DrawScene(); 
 
 
-	// pouzije shader pro nahledovy kriz
-	glUseProgram(n_preview_program_object);
+	if (showPatchLook) {
+		// pouzije shader pro nahledovy kriz
+		glUseProgram(n_preview_program_object);
 
-	{
-		// nastavime cisla texturovacich jednotek, odkud si shader bude brat textury
-		glUniform1i(n_box_sampler_uniform, 0);
+		{
+			// nastavime cisla texturovacich jednotek, odkud si shader bude brat textury
+			glUniform1i(n_box_sampler_uniform, 0);
+		}
+
+		// vykresli nahledovy kriz; obsahuje vlastni modelview matici pro fixni pozici na obrazovce
+		DrawSquare(); 
 	}
-
-	// vykresli nahledovy kriz; obsahuje vlastni modelview matici pro fixni pozici na obrazovce
-	DrawSquare(); 
 
 
 
