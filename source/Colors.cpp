@@ -91,6 +91,18 @@ uint32_t Colors::color(size_t colorIndex) {
 	return ((colorIndex & mask[RED]) << shift[RED]) | ((colorIndex & mask[GREEN]) << shift[GREEN]) | ((colorIndex & mask[BLUE]) << shift[BLUE]);	
 }
 
+/**
+ * Zabali barvu do 32b uintu (GL_UNSIGNED_INT_2_10_10_10_REV)
+ */
+uint32_t Colors::color(Vector3f color) {
+	uint32_t r = unsigned int(color.x * 1023);
+	uint32_t g = unsigned int(color.y * 1023);
+	uint32_t b = unsigned int(color.z * 1023);
+	uint32_t rg = r | (g << 10);
+	uint32_t rgb = rg | (b << 20);
+
+	return rgb;
+}
 
 /**
  * Vraci pole int-u kde kazdy int obsahuje 'zabalene' tri slozky jedne barvy

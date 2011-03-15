@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <stdint.h>
 #include <math.h>
+#include "Vector.h"
 
 using namespace std;
 
@@ -27,7 +28,7 @@ class Colors {
 
 
 		static uint32_t color(size_t colorIndex);
-
+		
 		
 	public:
 		static void setBits(unsigned short r, unsigned short g, unsigned short b);
@@ -37,6 +38,7 @@ class Colors {
 		static uint32_t* getUniqueColors();
 		static uint32_t* getIndicesColors();
 
+		static uint32_t color(Vector3f color);
 };
 
 
