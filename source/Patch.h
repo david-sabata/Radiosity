@@ -24,12 +24,15 @@ class Patch {
 		Vector3f getCenter();	// vraci bod v prostredu patche (pro umisteni kamery)
 		Vector3f getNormal();	// vraci normalu
 		Vector3f getUp();		// vraci pomocny Up vector; slouzi jako referencni bod pri otaceni pohledu
+		Color4f  getColor();	// vraci vlastni barvu patche
+		Color4f  getReflectivity();	// vraci odrazivost povrchu
+
+		Color4f radiosity;	// radiozita - zarivost povrchu
+		Color4f energy;		// take emissivity - vlastni zarivost plosky (pouze svetla)
 
 	protected:
 		Vector3f vec1, vec2, vec3, vec4;
 		Color4f color;		// vychozi barva povrchu - pouzita pro color bleeding
-		Color4f radiosity;	// radiozita - zarivost povrchu
-		Color4f energy;		// take emissivity - vlastni zarivost plosky (pouze svetla)
 		Color4f reflectivity;	// odrazivost plosky - pro vypocet kolik energie se pohlti/odrazi
 		
 };
