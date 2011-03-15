@@ -423,83 +423,74 @@ void CleanupGLObjects()
 }
 
 /**
- *	@brief vykresli geometrii sceny (bez specifikace cehokoliv jineho nez geometrie)
+ *	@brief vykresli uzivatelsky pohled do sceny (skutecne barvy patchu)
  */
 void DrawScene() {	
 	
 	int* indices = scene.getIndices();
 	float* vertices = scene.getVertices();
 	
-	if (step > 0) { // globalni - pro moznost prepinani
+	// vykresli vse barevne (s moznym opakovanim barev)		
+	unsigned int* colors = Colors::getUniqueColors();
 	
-		// for each interval (   <from; to)   )
-		// jelikoz jsou indexy rozdelene do intervalu, neni potreba pocitat pocatecni offsety, ty uz obsahuje VAO
-		unsigned int i = step % patchIntervals.size();
-		{
-		//for (unsigned int i = 0; i < intervals.size(); i++) {	
-			
-			glBindVertexArray(n_vertex_array_object);					
-			glVertexAttrib3f(1, 0.1f, 0.1f, 0.1f); // vse cerne
-			
-			// vykreslit cerne vse pred aktivnim intervalem
-			if (i > 0) {
-				int fromIndex = 0;
-				int count = 6 * patchIntervals[i-1].to; // kreslit indexy od 0 az po posledni pred aktivnim intervalem
-				glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
-			}
-			
-			// vykresli cerne vse za aktivnim intervalem
-			if (i < patchIntervals.size()-1) {
-				int fromIndex = 6 * patchIntervals[i+1].from;
-				int count = 6 * (patchIntervals.back().to - patchIntervals[i+1].from);
-				glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
-			}
-						
-		
-			// vykresli jeden interval s barevnymi patchi
-			glBindVertexArray(n_color_array_object[i]);	
-			//glVertexAttrib3f(1, 1.0f, 1.0f, 1.0f); 
-				
-			// spocitat pocet - vzdy 6 indexu; offset neni treba udavat, VAO uz obsahuje VBO na spravnem offsetu
-			int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);
-
-			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));	
-		}
-
-	} else {
-		// vykresli vse barevne (s moznym opakovanim barev)		
-		unsigned int* colors = Colors::getUniqueColors();
-		/*	
-		for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
-			glBindVertexArray(n_color_array_object[i]);			
-			//glVertexAttrib3f(1, colors[3 * i], colors[3 * i + 1], colors[3 * i + 2]);			
-			glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, colors[i]);
-			int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);	
-			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));
-		}
-		*/
-
-		for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
-			glBindVertexArray(n_color_array_object[i]);			
-			//glVertexAttrib3f(1, colors[3 * i], colors[3 * i + 1], colors[3 * i + 2]);			
-			//glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, colors[i]);
-			int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);	
-			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));
-		}
-
-		delete[] colors;
+	for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
+		glBindVertexArray(n_color_array_object[i]);					
+		//glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, colors[i]);
+		int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);	
+		glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));
 	}
 
-
+	delete[] colors;
+	
 	// vratime VAO 0, abychom si nahodne VAO nezmenili (pripadne osetreni 
 	//proti chybe v ovladacich nvidia kde se VAO poskodi pri volani nekterych wgl funkci)		
 	glBindVertexArray(0); 		
 }
 
 /**
- * Vykresli nahledovy ctverec s pohledem 'patchove' kamery
+ *	@brief vykresli pohled do sceny z patche lookFromPatch s barvami odpovidajicimi ID patchu
+ *  @param[in] interval interval ktery se bude kreslit
  */
-void DrawSquare() {		
+void DrawPatchLook(unsigned int interval) {	
+	
+	int* indices = scene.getIndices();
+	float* vertices = scene.getVertices();
+				
+	glBindVertexArray(n_vertex_array_object);					
+	glVertexAttrib3f(1, 0.1f, 0.1f, 0.1f); // vse cerne
+			
+	// vykreslit cerne vse pred aktivnim intervalem
+	if (interval > 0) {
+		int fromIndex = 0;
+		int count = 6 * patchIntervals[interval - 1].to; // kreslit indexy od 0 az po posledni pred aktivnim intervalem
+		glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
+	}
+			
+	// vykresli cerne vse za aktivnim intervalem
+	if (interval < patchIntervals.size()-1) {
+		int fromIndex = 6 * patchIntervals[interval + 1].from;
+		int count = 6 * (patchIntervals.back().to - patchIntervals[interval + 1].from);
+		glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
+	}						
+		
+	// vykresli jeden interval s barevnymi patchi
+	glBindVertexArray(n_color_array_object[interval]);	
+				
+	// spocitat pocet - vzdy 6 indexu; offset neni treba udavat, VAO uz obsahuje VBO na spravnem offsetu
+	int count = 6 * (patchIntervals[interval].to - patchIntervals[interval].from);
+
+	glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));	
+
+	// vratime VAO 0, abychom si nahodne VAO nezmenili (pripadne osetreni 
+	//proti chybe v ovladacich nvidia kde se VAO poskodi pri volani nekterych wgl funkci)		
+	glBindVertexArray(0); 		
+}
+
+
+/**
+ * Vykresli nahledovy kriz s pohledem 'patchove' kamery
+ */
+void DrawPatchLookPreview() {		
 	Matrix4f t_mvp;
 	t_mvp.Identity();
 	t_mvp.Scale(1, float(n_width) / n_height, 1);
@@ -929,12 +920,11 @@ void OnIdle(CGL30Driver &driver)
 		// nahrajeme matici do OpenGL jako parametr shaderu
 		glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
 
-		// vykreslit do textury (pres FBO)		
+		// vykreslit do textury (pres FBO)				
+		glViewport(p_viewport_list[i][0], p_viewport_list[i][1], 256, 256);		
 		
-		glViewport(p_viewport_list[i][0], p_viewport_list[i][1], 256, 256);
-		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // VYCISTI SPECIFIKOVANY OBDE
-		
-		DrawScene();	
+		unsigned int interval = step % patchIntervals.size();
+		DrawPatchLook(interval);
 	}
 
 	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
@@ -992,7 +982,7 @@ void OnIdle(CGL30Driver &driver)
 		}
 
 		// vykresli nahledovy kriz; obsahuje vlastni modelview matici pro fixni pozici na obrazovce
-		DrawSquare(); 
+		DrawPatchLookPreview(); 
 	}
 
 
