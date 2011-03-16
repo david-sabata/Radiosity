@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <time.h>
 #include <vector>
+#include <map>
+#include <list>
 #include "OpenGL30Drv.h"
 #include "Transform.h"
 #include "Tga.h"
@@ -187,7 +189,7 @@ bool InitGLObjects() {
 		unsigned int indCnt = scene.getPatchesCount() * 4; // pocet neopakujicich se indexu
 		uint32_t* colorData = new uint32_t[indCnt];
 		for (unsigned int i=0; i < indCnt; i++) {
-			if (1) { // vlastni barvy povrchu
+			if (0) { // vlastni barvy povrchu
 				Patch p = scene.getPatch(i / 4);
 				Color4f c = p.getColor();			
 				colorData[i] = Colors::packColor( Vector3f(c.x, c.y, c.z) );			
@@ -396,7 +398,7 @@ bool InitGLObjects() {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128*4, 128*3, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);				
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128*4, 128*3, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0); // TODO: ulozit rozmery jako konstantu				
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 
@@ -446,7 +448,7 @@ void CleanupGLObjects()
  *	@brief vykresli uzivatelsky pohled do sceny (skutecne barvy patchu)
  */
 void DrawScene() {	
-	
+	/*
 	int* indices = scene.getIndices();
 	float* vertices = scene.getVertices();
 	
@@ -461,14 +463,12 @@ void DrawScene() {
 	}
 
 	delete[] colors;
-	
-
-	/*
-	glBindVertexArray(n_vertex_array_object);
-	glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, 1024);
-	glDrawElements(GL_TRIANGLES, scene.getIndicesCount(), GL_UNSIGNED_INT, p_OffsetInVBO(0));
 	*/
 
+	glBindVertexArray(n_vertex_array_object);
+	//glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, 1024);
+	glDrawElements(GL_TRIANGLES, scene.getIndicesCount(), GL_UNSIGNED_INT, p_OffsetInVBO(0));
+	
 	// vratime VAO 0, abychom si nahodne VAO nezmenili (pripadne osetreni 
 	//proti chybe v ovladacich nvidia kde se VAO poskodi pri volani nekterych wgl funkci)		
 	glBindVertexArray(0); 		
@@ -957,8 +957,8 @@ void OnIdle(CGL30Driver &driver)
 			t_modelview.Identity();				
 
 			// vynasobit pohledem kamery patche
-			Patch p = scene.getPatch(lookFromPatch);
-			//Patch p = scene.getPatch(patchId);
+			//Patch p = scene.getPatch(lookFromPatch);
+			Patch p = scene.getPatch(patchId);
 			patchCam.lookFromPatch(p, dir);
 			t_modelview *= patchCam.GetMatrix();
 
@@ -985,13 +985,87 @@ void OnIdle(CGL30Driver &driver)
 	
 
 
+
+
+	// zpracovat vyrenderovanou texturu?
+	if (computeRadiosity) {
+
+		// pocty pixelu daneho patche v pohledu (texture); idPatche=>pocetPixelu
+		map<unsigned int, unsigned int> patchesInView;
+		
+		unsigned int texW = 128*4;
+		unsigned int texH = 128*3;
+		unsigned int texRes = texW * texH;
+
+		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); // nabindovat texturu
+
+		unsigned int* data = new unsigned int[texRes];
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
+
+
+		for (unsigned int i=0; i < texRes; i++) {
+			// cerna barva
+			if (data[i] == 0)
+				continue;
+
+			// prevest pixel na index
+			unsigned int ind = Colors::index(data[i]);
+			
+			/*
+			// prvni vkladani
+			if (patchesInView.find(ind) == patchesInView.end())
+				patchesInView[ind] = 0;
+			*/
+
+			// pricist vyskyt
+			patchesInView[ind] += 1;
+		}
+		
+		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+		
+		//Patch emitter = scene.getPatch(patchId); // patch ze ktereho se koukalo
+
+		// obnovit hodnoty ve VBO
+		for (map<unsigned int, unsigned int>::iterator it = patchesInView.begin(); it!=patchesInView.end(); it++) {
+			// hodnota v iteratoru je id barvy, a jelikoz cernou nepocitame, ma nulty patch barvu s indexem 1
+			unsigned int updatedPatchId = (*it).first - 1; 
+
+			cout << "patch " << updatedPatchId << ": " << (*it).second << endl;
+			
+			Patch p = scene.getPatch(updatedPatchId);
+			p.illumination += Color4f(0.5f, 0.5f, 0.5f, 1.0f);
+			
+			unsigned int offset = (updatedPatchId) * 4; // kazdy patch ma 4 vrcholy - 4 stejne barvy
+			uint32_t newColor = Colors::packColor( Vector3f(p.illumination.x, p.illumination.y, p.illumination.z) );
+			uint32_t newData[4] = {
+				newColor,
+				newColor,
+				newColor,
+				newColor
+			};
+			
+			glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+			
+		}
+
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		delete[] data;
+
+		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu
+
+		computeRadiosity = false; // pouze jeden krok
+	}
+
+
+
 	// ***********************************************************************************
 	// Vykreslit na obrazovku uzivatelsky pohled + nahledovy kriz
 	// ***********************************************************************************
 
 	// obonvit vychozi rozmer viewportu
 	glViewport(0, 0, n_width, n_height);
-	//glViewport(0, 0, 256, 256);
 
 	// nove nastavit modelview matici, tentokrat pro uzivatelsky (volny) pohled
 	{
@@ -1004,7 +1078,7 @@ void OnIdle(CGL30Driver &driver)
 		t_modelview.Identity();				
 
 		// vynasobit pohledem uzivatelske kamery
-		cam.lookFromPatch(scene.getPatch(lookFromPatch), lookFromPatchDir);
+		//cam.lookFromPatch(scene.getPatch(lookFromPatch), lookFromPatchDir);
 		t_modelview *= cam.GetMatrix();
 
 		// matice pohledu kamery
@@ -1026,7 +1100,6 @@ void OnIdle(CGL30Driver &driver)
 	// vykresli scenu
 	DrawScene(); 
 
-	//glViewport(60, 0, n_width, n_height);
 	if (showPatchLook) {
 		// pouzije shader pro nahledovy kriz
 		glUseProgram(n_preview_program_object);
@@ -1042,10 +1115,10 @@ void OnIdle(CGL30Driver &driver)
 
 
 
+	// ***********************************************************************************
 
 	// preklopi buffery, zobrazi co jsme nakreslili
 	driver.Blit(); 
-
 
 	// spocitat fps
 	glFinish();
