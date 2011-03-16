@@ -913,6 +913,8 @@ void OnIdle(CGL30Driver &driver)
 	Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,
 		Camera::PATCH_LOOK_LEFT, Camera::PATCH_LOOK_RIGHT, Camera::PATCH_LOOK_FRONT};
 
+	// 'okna' do kterych se budou kreslit jednotlive pohledy
+	// x, y, w, h
 	int p_viewport_list[][4] = {
 		{0, 256, 256, 256},
 		{256, 128, 256, 256},
@@ -921,11 +923,27 @@ void OnIdle(CGL30Driver &driver)
 		{128, 0, 256, 256}
 	};
 
+	// oblasti v texture, do kterych je povoleno kreslit;
+	// jelikoz se nektere casti kresli pres sebe, muze pri kresleni 'pruhledna' vznikat
+	// nezadouci zviditelneni drive vykreslene casti pohledu, ktery ale ma byt skryty, coz resi glScissor
+	// 
+	// x, y, w, h
+	int p_scissors_list[][4] = {
+		{0, 256, 256, 128},
+		{256, 256, 256, 128},
+		{0, 0, 128, 256},
+		{384, 0, 128, 256},
+		{128, 0, 256, 256}
+	};
+
 	// najit patch s nejvetsi energii
 	unsigned int patchId = scene.getHighestRadiosityPatchId();
 
+	glEnable(GL_SCISSOR_TEST);
+
 	// celkem 5 pohledu
 	for(int i=0; i < 5; i++) {
+				
 		Camera::PatchLook dir = p_patchlook_perm[i];
 
 		// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
@@ -951,12 +969,16 @@ void OnIdle(CGL30Driver &driver)
 		// nahrajeme matici do OpenGL jako parametr shaderu
 		glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
 
-		// vykreslit do textury (pres FBO)				
-		glViewport(p_viewport_list[i][0], p_viewport_list[i][1], 256, 256);		
+		// nastavit parametry viewportu a oblast, do ktere je povoleno kreslit
+		glScissor(p_scissors_list[i][0], p_scissors_list[i][1], p_scissors_list[i][2], p_scissors_list[i][3]);
+		glViewport(p_viewport_list[i][0], p_viewport_list[i][1], p_viewport_list[i][2], p_viewport_list[i][3]);
 		
+		// vykreslit do textury (pres FBO)		
 		unsigned int interval = step % patchIntervals.size();
 		DrawPatchLook(interval);
 	}
+
+	glDisable(GL_SCISSOR_TEST);
 
 	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
 	fbo->Release();

@@ -150,7 +150,7 @@ GLuint Shaders::getPreviewProgram() {
 		"uniform sampler2D n_tex;\n"
 		"\n"
 		"void main()\n"
-		"{\n"
+		"{\n"		
 		"    vec4 tex_color = vec4(0.0);"
 		"    if(v_texcoord.y >= 0.25 && v_texcoord.y <= 0.75) {"
 		"        if(v_texcoord.x < 0.25)"
@@ -164,25 +164,28 @@ GLuint Shaders::getPreviewProgram() {
 		"    else if(v_texcoord.y > 0.75 && v_texcoord.x >= 0.25 && v_texcoord.x <= 0.75)"
 		"        tex_color = texture(n_tex, (v_texcoord + vec2(-0.25, -.75)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.0, 0.66667));"
 		"    else discard;"
-		/*"    vec4 tex_color = texture(n_tex, v_texcoord) * .5;//vec4(0.0);\n" // precte texturu krabice
+		//"    vec4 tex_color = texture(n_tex, v_texcoord);\n"
+		/*		
+		"    vec4 tex_color = texture(n_tex, v_texcoord) * .5;//vec4(0.0);\n" // precte texturu krabice
 		"    float f_tex_length = length(v_normal_tex);\n"
 		"    vec3 v_ray = vec3(v_normal_tex, sqrt(1 - f_tex_length));\n"
 		"    if(f_tex_length > 1.0)\n"
 		"        discard;\n"
 		"    vec3 v_ray_abs = abs(v_ray);\n"
-		"    if(v_ray.z > v_ray_abs.x && v_ray.z > v_ray_abs.y)\n"
+		"    if(v_ray.z > v_ray_abs.x && v_ray.z > v_ray_abs.y)\n" // dopredu
 		"        tex_color = texture(n_tex, ((v_ray.xy / v_ray.z) * .5 + .5) * vec2(0.5, 0.66667) + vec2(0.25, 0.0));\n"
 		"    else if(v_ray_abs.x > v_ray_abs.y) {\n"
-		"        if(v_ray.x < 0)\n"
-		"            tex_color = texture(n_tex, ((v_ray.yz / v_ray.x) * vec2(-0.5, -0.5) + vec2(0.5, 0.5)) * vec2(-0.25, -0.66667) + vec2(0.25, 0.66667));\n"
-		"        else\n"
+		"        if(v_ray.x < 0)\n" // vlevo
+		"            tex_color = texture(n_tex, ((v_ray.yz / v_ray.x) * vec2(0.5, 0.5) + vec2(0.5, 0.5)) * vec2(-0.25, -0.66667) + vec2(0.25, 0.66667));\n"
+		"        else\n" // vpravo
 		"            tex_color = texture(n_tex, ((v_ray.yz / v_ray.x) * vec2(-0.5, 0.5) + vec2(0.5, 0.5)) * vec2(0.25, 0.66667) + vec2(0.75, 0.0));\n"
 		"    } else {\n"
-		"        if(v_ray.y < 0)\n"
+		"        if(v_ray.y < 0)\n" // nahoru
 		"            tex_color = texture(n_tex, ((v_ray.xz / v_ray.y) * vec2(0.5, 0.5) + vec2(0.5, 0.5)) * vec2(-0.5, -0.33333) + vec2(1.0, 1.0));\n"
-		"        else\n"
+		"        else\n" // dolu
 		"            tex_color = texture(n_tex, ((v_ray.xz / v_ray.y) * vec2(0.5, -0.5) + vec2(0.5, 0.5)) * vec2(0.5, 0.33333) + vec2(0, 0.66667));\n"
-		"    }\n"*/
+		"    }\n"
+		*/
 		"    frag_color = tex_color;\n"
 		"}\n";
 
