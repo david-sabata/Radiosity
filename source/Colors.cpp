@@ -88,7 +88,15 @@ unsigned int Colors::getColorRange() {
  * Vraci barvu odpovidajiciho cisla (indexovane barvy) mapovanou do 32b unsigned intu
  */
 uint32_t Colors::color(size_t colorIndex) {
+	_ASSERT(colorIndex < range); // shifty a masky se vzdy vazi k danemu rozsahu; pro vyssi indexy nebudou barvy spravne
 	return ((colorIndex & mask[RED]) << shift[RED]) | ((colorIndex & mask[GREEN]) << shift[GREEN]) | ((colorIndex & mask[BLUE]) << shift[BLUE]);	
+}
+
+/**
+ * Vraci index odpovidajici zabalene barve - opacna operace k Colors::color()
+ */
+size_t Colors::index(uint32_t color) {
+	return ( ((color & (mask[RED] << shift[RED])) >> shift[RED]) | ((color & (mask[GREEN] << shift[GREEN])) >> shift[GREEN]) | ((color & (mask[BLUE] << shift[BLUE])) >> shift[BLUE]) );
 }
 
 /**
@@ -110,12 +118,13 @@ uint32_t Colors::packColor(Vector3f color) {
 Vector3f Colors::unpackColor(uint32_t color) {
 	Vector3f out;
 
-	out.x = (color &  MASK32(10)) / 1023;
-	out.y = (color & (MASK32(10) << 10)) / 1023;
-	out.z = (color & (MASK32(10) << 20)) / 1023;
+	out.x = float(color &  MASK32(10)) / 1023;
+	out.y = float(color & (MASK32(10) << 10)) / 1023;
+	out.z = float(color & (MASK32(10) << 20)) / 1023;
 
 	return out;
 }
+
 
 /**
  * Vraci pole int-u kde kazdy int obsahuje 'zabalene' tri slozky jedne barvy

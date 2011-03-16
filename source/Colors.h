@@ -24,10 +24,7 @@ class Colors {
 			RED = 0,
 			GREEN,
 			BLUE
-		};
-
-
-		static uint32_t color(size_t colorIndex);
+		};		
 		
 		
 	public:
@@ -38,8 +35,11 @@ class Colors {
 		static uint32_t* getUniqueColors();
 		static uint32_t* getIndicesColors();
 
-		static uint32_t packColor(Vector3f color);
-		static Vector3f unpackColor(uint32_t color);
+		static uint32_t packColor(Vector3f color);	// vygeneruje barvu z indexu do GL_UNSIGNED_INT_2_10_10_10_REV
+		static Vector3f unpackColor(uint32_t color); // prevede barvu z GL_UNSIGNED_INT_2_10_10_10_REV do vektoru
+
+		static uint32_t color(size_t colorIndex); // vraci GL_UNSIGNED_INT_2_10_10_10_REV barvu odpovidajici indexu
+		static size_t index(uint32_t color); // vraci index odpovidajici GL_UNSIGNED_INT_2_10_10_10_REV zabalene barve
 };
 
 
