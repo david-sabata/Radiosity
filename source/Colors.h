@@ -38,7 +38,8 @@ class Colors {
 		static uint32_t* getUniqueColors();
 		static uint32_t* getIndicesColors();
 
-		static uint32_t color(Vector3f color);
+		static uint32_t packColor(Vector3f color);
+		static Vector3f unpackColor(uint32_t color);
 };
 
 

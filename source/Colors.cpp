@@ -1,6 +1,9 @@
 
 #include "Colors.h"
 
+// vyrobi masku pro b bitu; (bere ohled na masku pres vsechny bity - rozdeli masku na dve casti, prvni bit a zbytek)
+#define MASK32(b) (((1 << ((b) - 1)) - 1) | (1 << ((b) - 1)))
+
 
 short Colors::bits[3] = { 10, 10, 10 }; // vychozi hodnota, lze nastavit Colors::setBits
 short Colors::shift[3] = {};
@@ -49,9 +52,6 @@ void Colors::setNeededColors(unsigned int colors) {
 	shift[GREEN] = zg + bits[RED];
 	shift[BLUE] = zb + bits[RED] + bits[GREEN]; 
 
-// vyrobi masku pro b bitu; (bere ohled na masku pres vsechny bity - rozdeli masku na dve casti, prvni bit a zbytek)
-#define MASK32(b) (((1 << ((b) - 1)) - 1) | (1 << ((b) - 1)))
-
 	// spocita pozici bitu s barvou v celkovem rozsahu barvy
 	mask[RED] = MASK32(bits[RED] - zr);
 	mask[GREEN] = MASK32(bits[GREEN] - zg);
@@ -92,9 +92,9 @@ uint32_t Colors::color(size_t colorIndex) {
 }
 
 /**
- * Zabali barvu do 32b uintu (GL_UNSIGNED_INT_2_10_10_10_REV)
+ * Zabali barvu do 32b uintu (GL_UNSIGNED_INT_2_10_10_10_REV) - pouze RGB slozky
  */
-uint32_t Colors::color(Vector3f color) {
+uint32_t Colors::packColor(Vector3f color) {
 	uint32_t r = unsigned int(color.x * 1023);
 	uint32_t g = unsigned int(color.y * 1023);
 	uint32_t b = unsigned int(color.z * 1023);
@@ -102,6 +102,19 @@ uint32_t Colors::color(Vector3f color) {
 	uint32_t rgb = rg | (b << 20);
 
 	return rgb;
+}
+
+/**
+ * Rozbali barvu do vektoru z 32b uintu (GL_UNSIGNED_INT_2_10_10_10_REV) - pouze RGB slozky
+ */
+Vector3f Colors::unpackColor(uint32_t color) {
+	Vector3f out;
+
+	out.x = (color &  MASK32(10)) / 1023;
+	out.y = (color & (MASK32(10) << 10)) / 1023;
+	out.z = (color & (MASK32(10) << 20)) / 1023;
+
+	return out;
 }
 
 /**
