@@ -30,8 +30,9 @@ class ModelContainer {
 		int		getVerticesCount();	// vraci delku pole vrcholu
 		int*	getIndices();	// vraci pole vazeb mezi vrcholy
 		int		getIndicesCount();	// vraci delku pole vazeb
-		unsigned int	getPatchesCount(); // vraci pocet patchu ve scene
-		Patch& ModelContainer::getPatch(unsigned int i); // vraci referenci na i-tou plosku ve scene
+		unsigned int getPatchesCount(); // vraci pocet patchu ve scene
+		Patch& getPatch(unsigned int i); // vraci referenci na i-tou plosku ve scene
+		unsigned int getHighestRadiosityPatchId(); // vraci cislo patche s nejvetsi energii
 
 		double maxPatchArea; // maximalni obsah plosek (pokud je vetsi nez 0, deli se plosky dokud neni plocha mensi)
 

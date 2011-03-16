@@ -217,3 +217,30 @@ Patch& ModelContainer::getPatch(unsigned int i) {
 	}
 
 }
+
+
+/**
+ * Vraci ID patche s nejvyssi radiositou
+ */
+unsigned int ModelContainer::getHighestRadiosityPatchId() {
+	unsigned int offset = 0; // cislovani patchu napric modely
+	unsigned int i = 0;
+	Patch* max = NULL;
+
+	for (vector<Model*>::iterator it = models.begin(); it != models.end(); it++) {
+		vector<Patch*>* patches = (*it)->getPatches();
+
+		unsigned int pi = 0; // cislo patche v ramci modelu
+		for (vector<Patch*>::iterator pit = patches->begin(); pit != patches->end(); pit++) {
+			if (max == NULL || (*pit)->radiosity >= max->radiosity) {
+				max = (*pit);
+				i = offset + pi;
+			}
+			pi++;
+		}
+
+		offset += patches->size();
+	}
+
+	return i;
+}
