@@ -39,6 +39,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 
 static GLuint n_patchlook_texture;
 
+// vbos, vaos
 static GLuint n_vertex_buffer_object, n_index_buffer_object, n_vertex_array_object, n_tex_buffer_object,
 	n_vbo_square, n_vao_square;
 
@@ -48,9 +49,15 @@ static GLuint n_patch_program_object, n_patchprogram_mvp_matrix_uniform;
 
 static GLuint n_preview_program_object, n_preview_mvp_matrix_uniform;
 
-static GLuint n_color_buffer_object;
-static GLuint* n_color_array_object = NULL; // pole VAO pro kazdy interval vykreslovanych patchu
-// OpenGL objekty
+// VBO pro barvy odpovidajici IDckam patchu
+static GLuint n_id_color_buffer_object; 
+
+// VBO pro zobrazovane barvy patchu (vypoctene; nemusi odpovidat barvam materialu)
+static GLuint n_patch_color_buffer_object; 
+
+// pole VAO pro kazdy interval vykreslovanych patchu
+static GLuint* n_color_array_object = NULL; 
+
 
 
 // citlivosti / rychlosti pohybu
@@ -160,20 +167,36 @@ bool InitGLObjects() {
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, scene.getIndicesCount() * sizeof(int), scene.getIndices(), GL_STATIC_DRAW);		
 	
 
-	// VBO pro ulozeni barev - bude obsahovat jeden interval barev; barva se sklada ze tri floatu
-	glGenBuffers(1, &n_color_buffer_object);	
-	glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);	
-	
-	Colors::setNeededColors(scene.getIndicesCount() / 4); // idealni rozsah barev
-	uint32_t* colorData = Colors::getIndicesColors(); // colorRange * 4 indexy
-	unsigned int colorRange = Colors::getColorRange();		
-	glBufferData(GL_ARRAY_BUFFER, colorRange * 4 * sizeof(uint32_t), colorData, GL_STATIC_DRAW);
+	// VBO pro ulozeni barev podle ID patchu - bude obsahovat jeden interval barev (kazda barva zabalena do intu)
+	glGenBuffers(1, &n_id_color_buffer_object);	
+	glBindBuffer(GL_ARRAY_BUFFER, n_id_color_buffer_object);	
+	// naplnit unikatnimi barvami
+	{
+		Colors::setNeededColors(scene.getIndicesCount() / 4); // idealni rozsah barev - pro optimalizaci generovani
+		uint32_t* colorData = Colors::getIndicesColors(); // colorRange * 4 indexy
+		unsigned int colorRange = Colors::getColorRange();		
+		glBufferData(GL_ARRAY_BUFFER, colorRange * 4 * sizeof(uint32_t), colorData, GL_STATIC_DRAW);		
+		delete[] colorData;	// data jsou uz zkopirovana ve VBO
+	}
 
-	cout << " unique colors: " << colorRange << endl;
-	
-	// data jsou uz zkopirovana ve VBO	
-	delete[] colorData; 	
-
+	// VBO pro ulozeni zobrazovanych barev patchu (vypocitane; nemusi odpovidat barvam materialu; barvy jsou zabalene do intu)
+	glGenBuffers(1, &n_patch_color_buffer_object);
+	glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+	// na zacatku je vse cerne - jeste nebyly vyzareny zadne energie
+	{
+		unsigned int indCnt = scene.getPatchesCount() * 4; // pocet neopakujicich se indexu
+		uint32_t* colorData = new uint32_t[indCnt];
+		for (unsigned int i=0; i < indCnt; i++) {
+			if (1) { // vlastni barvy povrchu
+				Patch p = scene.getPatch(i / 4);
+				Color4f c = p.getColor();			
+				colorData[i] = Colors::packColor( Vector3f(c.x, c.y, c.z) );			
+			} else // vychozi (cerna) barva
+				colorData[i] = Colors::packColor( Vector3f(0.1f, 0.1f, 0.1f) ); // testing! nahradit za 0,0,0 - cerna barva!			
+		}
+		glBufferData(GL_ARRAY_BUFFER, indCnt * sizeof(uint32_t), colorData, GL_DYNAMIC_DRAW);
+		delete[] colorData;
+	}
 
 	// VBO pro ulozeni souradnic textur - TODO: resit uz pri nacitani
 	glGenBuffers(1, &n_tex_buffer_object);	
@@ -213,13 +236,10 @@ bool InitGLObjects() {
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
 	
-		// atribut shaderu se pri kresleni nastavi napevno na cernou barvu
-		if (0) {
-			// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva ma 3 hodnoty,		
-			glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);
-			glEnableVertexAttribArray(1);
-			glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
-		}
+		// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva je zabalena v uintu	
+		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
 
 		// rekneme OpenGL odkud si ma brat souradnice textur; souradnice se sklada ze dvou hodnot	
 		glBindBuffer(GL_ARRAY_BUFFER, n_tex_buffer_object);
@@ -244,7 +264,7 @@ bool InitGLObjects() {
 	int divided = 0;
 	do {
 		int from = divided;
-		int to = divided + colorRange;
+		int to = divided + Colors::getColorRange();
 		if (to > patchCount)
 			to = patchCount;
 
@@ -270,7 +290,7 @@ bool InitGLObjects() {
 			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(3 * 4 * patchIntervals[i].from * sizeof(float)));
 			
 			// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva ma 3 hodnoty,		
-			glBindBuffer(GL_ARRAY_BUFFER, n_color_buffer_object);
+			glBindBuffer(GL_ARRAY_BUFFER, n_id_color_buffer_object);
 			glEnableVertexAttribArray(1);
 			glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
 
@@ -442,6 +462,13 @@ void DrawScene() {
 
 	delete[] colors;
 	
+
+	/*
+	glBindVertexArray(n_vertex_array_object);
+	glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, 1024);
+	glDrawElements(GL_TRIANGLES, scene.getIndicesCount(), GL_UNSIGNED_INT, p_OffsetInVBO(0));
+	*/
+
 	// vratime VAO 0, abychom si nahodne VAO nezmenili (pripadne osetreni 
 	//proti chybe v ovladacich nvidia kde se VAO poskodi pri volani nekterych wgl funkci)		
 	glBindVertexArray(0); 		
@@ -894,6 +921,9 @@ void OnIdle(CGL30Driver &driver)
 		{128, 0, 256, 256}
 	};
 
+	// najit patch s nejvetsi energii
+	unsigned int patchId = scene.getHighestRadiosityPatchId();
+
 	// celkem 5 pohledu
 	for(int i=0; i < 5; i++) {
 		Camera::PatchLook dir = p_patchlook_perm[i];
@@ -910,6 +940,7 @@ void OnIdle(CGL30Driver &driver)
 
 			// vynasobit pohledem kamery patche
 			Patch p = scene.getPatch(lookFromPatch);
+			//Patch p = scene.getPatch(patchId);
 			patchCam.lookFromPatch(p, dir);
 			t_modelview *= patchCam.GetMatrix();
 
@@ -938,6 +969,7 @@ void OnIdle(CGL30Driver &driver)
 
 	// obonvit vychozi rozmer viewportu
 	glViewport(0, 0, n_width, n_height);
+	//glViewport(0, 0, 256, 256);
 
 	// nove nastavit modelview matici, tentokrat pro uzivatelsky (volny) pohled
 	{
@@ -950,6 +982,7 @@ void OnIdle(CGL30Driver &driver)
 		t_modelview.Identity();				
 
 		// vynasobit pohledem uzivatelske kamery
+		cam.lookFromPatch(scene.getPatch(lookFromPatch), lookFromPatchDir);
 		t_modelview *= cam.GetMatrix();
 
 		// matice pohledu kamery
@@ -971,7 +1004,7 @@ void OnIdle(CGL30Driver &driver)
 	// vykresli scenu
 	DrawScene(); 
 
-
+	//glViewport(60, 0, n_width, n_height);
 	if (showPatchLook) {
 		// pouzije shader pro nahledovy kriz
 		glUseProgram(n_preview_program_object);
