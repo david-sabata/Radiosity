@@ -150,6 +150,8 @@ GLuint Shaders::getPreviewProgram() {
 		"uniform sampler2D n_tex;\n"
 		"\n"
 		"void main()\n"
+		// nahledovy kriz se kresli nejak podivne - pri nekterych pohledech se v texture prekryvaji barvy a vznikaji
+		// barevne obdelniky
 		"{\n"
 		"    vec4 tex_color = vec4(0.0);"
 		"    if(v_texcoord.y >= 0.25 && v_texcoord.y <= 0.75) {"
