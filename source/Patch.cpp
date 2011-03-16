@@ -6,6 +6,7 @@ Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4) {
 	Patch::vec2 = vec2;
 	Patch::vec3 = vec3;
 	Patch::vec4 = vec4;
+	Patch::reflectivity = REFLECTIVITY;
 }
 
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f color) {
@@ -13,16 +14,18 @@ Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f
 	Patch::vec2 = vec2;
 	Patch::vec3 = vec3;
 	Patch::vec4 = vec4;
+	Patch::reflectivity = REFLECTIVITY;
 	Patch::color = color;
 }
 
-Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f color, Color4f energy) {
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f color, float energy) {
 	Patch::vec1 = vec1;
 	Patch::vec2 = vec2;
 	Patch::vec3 = vec3;
 	Patch::vec4 = vec4;
+	Patch::reflectivity = REFLECTIVITY;
 	Patch::color = color;
-	Patch::energy = energy;
+	Patch::radiosity = energy;
 }
 
 
@@ -39,7 +42,7 @@ Patch::~Patch(void) {
 vector<Patch*>* Patch::divide(double area) {	
 
 	// deleni bude probihat pouze pokud patch nema pocatecni vlastni energii
-	if (energy.x > 0 || energy.y > 0 || energy.z > 0 || energy.w > 0)
+	if (radiosity > 0)
 		return NULL;
 
 
@@ -84,10 +87,10 @@ vector<Patch*>* Patch::divide(double area) {
 
 	vector<Patch*>* patches = new vector<Patch*>;
 
-	patches->push_back( new Patch(A, AB, E, DA, this->color, this->energy) );
-	patches->push_back( new Patch(AB, B, BC, E, this->color, this->energy) );
-	patches->push_back( new Patch(BC, C, CD, E, this->color, this->energy) );
-	patches->push_back( new Patch(CD, D, DA, E, this->color, this->energy) );
+	patches->push_back( new Patch(A, AB, E, DA, this->color, this->radiosity) );
+	patches->push_back( new Patch(AB, B, BC, E, this->color, this->radiosity) );
+	patches->push_back( new Patch(BC, C, CD, E, this->color, this->radiosity) );
+	patches->push_back( new Patch(CD, D, DA, E, this->color, this->radiosity) );
 
 	//cout << "====================" << endl;
 
@@ -158,6 +161,6 @@ Color4f Patch::getColor() {
 /**
  * Vraci odrazivost povrchu
  */
-Color4f Patch::getReflectivity() {
+float Patch::getReflectivity() {
 	return reflectivity;
 }
