@@ -8,6 +8,8 @@ ModelContainer::ModelContainer(void) {
 	verticesCount = 0;
 	indicesCount = 0;
 	
+	patches = NULL;
+
 	maxPatchArea = 0; // defaultne bez deleni
 
 	needRefresh = false;
@@ -22,6 +24,7 @@ ModelContainer::~ModelContainer(void) {
 	// vyprazdnit pole vrcholu a indexu
 	delete [] vertices;
 	delete [] indices;
+	delete [] patches;
 }
 
 
@@ -76,6 +79,7 @@ void ModelContainer::updateData() {
 	// seskladat data z jednotlivych modelu do jedineho (pomocneho) vektoru
 	vector<float>* tmpVertices = new vector<float>();
 	vector<int>* tmpIndices = new vector<int>();
+	vector<Patch*>* tmpPatches = new vector<Patch*>();
 
 	// nove pocty vrcholu, indexu a patchu
 	verticesCount = 0;
@@ -108,12 +112,15 @@ void ModelContainer::updateData() {
 			tmpIndices->push_back(baseOffset + 2);
 			tmpIndices->push_back(baseOffset + 3);
 
+			// zkopirovat patch
+			tmpPatches->push_back((*itP));
+
 			offset += 4;
 		}		
 	}
 		
 
-	// obnovit pole vrcholu a indexu
+	// obnovit pole vrcholu, indexu a patchu
 	if (vertices != NULL)
 		delete [] vertices;
 	vertices = new float[verticesCount];
@@ -122,28 +129,21 @@ void ModelContainer::updateData() {
 		delete [] indices;
 	indices = new int[indicesCount];
 
+	if (patches != NULL)
+		delete [] patches;
+	patches = new Patch*[patchesCount];
+
 	// presunout data z pomocneho vektoru do pole
 	copy(tmpVertices->begin(), tmpVertices->end(), vertices);
 	copy(tmpIndices->begin(), tmpIndices->end(), indices);
-	
-	
-	if (0) {
-		for (int i = 0; i < indicesCount; i+=6)
-			printf("%i %i %i | %i %i %i \n", indices[i], indices[i+1], indices[i+2], indices[i+3], indices[i+4], indices[i+5]);
-
-		printf("\n");
-
-		for (int i = 0; i < verticesCount; i+=3)
-			printf("%f %f %f\n", vertices[i], vertices[i+1], vertices[i+2]);
-	}
-
+	copy(tmpPatches->begin(), tmpPatches->end(), patches);
 
 	//printf("scene vertices: %i\n scene indices: %i\n", verticesCount/3, indicesCount);
 	printf("scene patches: %i\n", patchesCount);
 	
-
 	delete tmpVertices;
 	delete tmpIndices;
+	delete tmpPatches;
 
 	needRefresh = false;
 }
@@ -172,7 +172,7 @@ float* ModelContainer::getVertices() {
 /**
  * Vraci pocet indexu v poli
  */
-int ModelContainer::getIndicesCount() {
+unsigned int ModelContainer::getIndicesCount() {
 	if (needRefresh == true)
 		updateData();
 
@@ -182,13 +182,22 @@ int ModelContainer::getIndicesCount() {
 /**
  * Vraci pocet vrcholu v poli
  */
-int ModelContainer::getVerticesCount() {
+unsigned int ModelContainer::getVerticesCount() {
 	if (needRefresh == true)
 		updateData();
 
 	return verticesCount;
 }
 
+/**
+ * Vraci pole ukazatelu na patche o delce patchesCount
+ */
+Patch** ModelContainer::getPatches() {
+	if (needRefresh == true)
+		updateData();
+
+	return patches;
+}
 
 /**
  * Vraci pocet patchu ve scene
@@ -200,47 +209,20 @@ unsigned int ModelContainer::getPatchesCount() {
 	return patchesCount;
 }
 
-/**
- * Vraci referenci na i-tou plosku ve scene
- * Pouziva se zejmena pri vypoctech radiozity a pozicovani kamery
- */
-Patch& ModelContainer::getPatch(unsigned int i) {
-	unsigned int offset = 0; // cislovani patchu napric modely
-
-	for (vector<Model*>::iterator it = models.begin(); it != models.end(); it++) {		
-		vector<Patch*>* patches = (*it)->getPatches( maxPatchArea );
-		if (offset + patches->size() > i) {
-			Patch* p = patches->at(i - offset);
-			return (*p);
-		}
-		offset += patches->size();
-	}
-
-}
-
 
 /**
  * Vraci ID patche s nejvyssi radiositou
  */
 unsigned int ModelContainer::getHighestRadiosityPatchId() {
-	unsigned int offset = 0; // cislovani patchu napric modely
-	unsigned int i = 0;
+	unsigned int maxI = 0;
 	Patch* max = NULL;
 
-	for (vector<Model*>::iterator it = models.begin(); it != models.end(); it++) {
-		vector<Patch*>* patches = (*it)->getPatches();
-
-		unsigned int pi = 0; // cislo patche v ramci modelu
-		for (vector<Patch*>::iterator pit = patches->begin(); pit != patches->end(); pit++) {
-			if (max == NULL || (*pit)->radiosity.f_Length2() > max->radiosity.f_Length2()) {
-				max = (*pit);
-				i = offset + pi;
-			}
-			pi++;
+	for (unsigned int pi = 0; pi < patchesCount; pi++) {
+		if (max == NULL || patches[pi]->radiosity.f_Length2() > max->radiosity.f_Length2()) {
+			max = patches[pi];
+			maxI = pi;
 		}
-
-		offset += patches->size();
 	}
 
-	return i;
+	return maxI;
 }

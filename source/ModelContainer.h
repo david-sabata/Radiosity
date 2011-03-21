@@ -27,12 +27,14 @@ class ModelContainer {
 		void updateData();	// naplni vnitrni promenne s vrcholy/idexy aktualnimi hodnotami
 
 		float*	getVertices();	// vraci pole vrcholu patchu
-		int		getVerticesCount();	// vraci delku pole vrcholu
+		unsigned int	getVerticesCount();	// vraci delku pole vrcholu
+
 		int*	getIndices();	// vraci pole vazeb mezi vrcholy
-		int		getIndicesCount();	// vraci delku pole vazeb
-		unsigned int getPatchesCount(); // vraci pocet patchu ve scene
-		Patch& getPatch(unsigned int i); // vraci referenci na i-tou plosku ve scene
-		unsigned int getHighestRadiosityPatchId(); // vraci cislo patche s nejvetsi energii
+		unsigned int	getIndicesCount();	// vraci delku pole vazeb
+
+		Patch**	getPatches(); // vraci pole vsech patchu ve scene (pokud je scena frozen, je vzdy konstantni)
+		unsigned int	getPatchesCount(); // vraci pocet patchu ve scene
+		unsigned int	getHighestRadiosityPatchId(); // vraci cislo patche s nejvetsi radiativni energii
 
 		double maxPatchArea; // maximalni obsah plosek (pokud je vetsi nez 0, deli se plosky dokud neni plocha mensi)
 
@@ -41,10 +43,14 @@ class ModelContainer {
 
 		std::vector<Model *> models; // pole modelu ve scene
 		
-		float* vertices;	// pole vrcholu, dynamicky alokovane
-		int verticesCount;	// velikost pole vrcholu (pocet hodnot)
-		int* indices;	// pole indexu souvisejicich vrcholu, dynamicky alokovane
-		int indicesCount;	// velikost pole indexu (pocet hodnot)
+		Patch** patches; // pole ukazatelu na patche ve scene o delce getPatchesCount, indexovano cislem patche
 		unsigned int patchesCount;	// celkovy pocet patchu ve scene
+
+		float* vertices;	// pole vrcholu, dynamicky alokovane
+		unsigned int verticesCount;	// velikost pole vrcholu (pocet hodnot)
+
+		int* indices;	// pole indexu souvisejicich vrcholu, dynamicky alokovane
+		unsigned int indicesCount;	// velikost pole indexu (pocet hodnot)
+
 };
 
