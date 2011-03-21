@@ -174,7 +174,7 @@ bool InitGLObjects() {
 	glBindBuffer(GL_ARRAY_BUFFER, n_id_color_buffer_object);	
 	// naplnit unikatnimi barvami
 	{
-		Colors::setNeededColors(scene.getIndicesCount() / 4); // idealni rozsah barev - pro optimalizaci generovani
+		Colors::setNeededColors(scene.getPatchesCount()); // idealni rozsah barev - pro optimalizaci generovani
 		uint32_t* colorData = Colors::getIndicesColors(); // colorRange * 4 indexy
 		unsigned int colorRange = Colors::getColorRange();		
 		glBufferData(GL_ARRAY_BUFFER, colorRange * 4 * sizeof(uint32_t), colorData, GL_STATIC_DRAW);		
@@ -189,12 +189,7 @@ bool InitGLObjects() {
 		unsigned int indCnt = scene.getPatchesCount() * 4; // pocet neopakujicich se indexu
 		uint32_t* colorData = new uint32_t[indCnt];
 		for (unsigned int i=0; i < indCnt; i++) {
-			if (0) { // vlastni barvy povrchu
-				Patch p = scene.getPatch(i / 4);
-				Color4f c = p.getColor();			
-				colorData[i] = Colors::packColor( Vector3f(c.x, c.y, c.z) );			
-			} else // vychozi (cerna) barva
-				colorData[i] = Colors::packColor( Vector3f(0.1f, 0.1f, 0.1f) ); // testing! nahradit za 0,0,0 - cerna barva!			
+			colorData[i] = 0; // vychozi (cerna) barva
 		}
 		glBufferData(GL_ARRAY_BUFFER, indCnt * sizeof(uint32_t), colorData, GL_DYNAMIC_DRAW);
 		delete[] colorData;
@@ -204,8 +199,8 @@ bool InitGLObjects() {
 	glGenBuffers(1, &n_tex_buffer_object);	
 	glBindBuffer(GL_ARRAY_BUFFER, n_tex_buffer_object);	
 	float* texCoords = new float[(scene.getVerticesCount() / 3) * 2];
-	int offset = 0; // offset v texCoords
-	for (int i = 0; i < scene.getVerticesCount() / 3; i++) {
+	unsigned int offset = 0; // offset v texCoords
+	for (unsigned int i = 0; i < scene.getVerticesCount() / 3; i++) {
 		switch( i % 4 ) {
 			case 0:
 				texCoords[offset] = 0.0f;
@@ -398,7 +393,7 @@ bool InitGLObjects() {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128*4, 128*3, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0); // TODO: ulozit rozmery jako konstantu				
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, 128*4, 128*3, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0); // TODO: ulozit rozmery jako konstantu				
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 
@@ -896,6 +891,8 @@ void OnIdle(CGL30Driver &driver)
 	
 	Matrix4f t_mvp;
 
+	Patch** scenePatches = scene.getPatches();
+	unsigned int scenePatchesCount = scene.getPatchesCount();
 
 	// ***********************************************************************************
 	// Vykreslit do FBO pohled z patche
@@ -957,9 +954,7 @@ void OnIdle(CGL30Driver &driver)
 			t_modelview.Identity();				
 
 			// vynasobit pohledem kamery patche
-			//Patch p = scene.getPatch(lookFromPatch);
-			Patch p = scene.getPatch(patchId);
-			patchCam.lookFromPatch(p, dir);
+			patchCam.lookFromPatch(scenePatches[patchId], dir);
 			t_modelview *= patchCam.GetMatrix();
 
 			// matice pohledu kamery
@@ -990,8 +985,9 @@ void OnIdle(CGL30Driver &driver)
 	// zpracovat vyrenderovanou texturu?
 	if (computeRadiosity) {
 
-		// pocty pixelu daneho patche v pohledu (texture); idPatche=>pocetPixelu
-		map<unsigned int, unsigned int> patchesInView;
+		// patche v pohledu - index je cislo patche, hodnota je soucin form factoru
+		unsigned int* patchesInView = new unsigned int[scenePatchesCount];
+		fill(patchesInView, patchesInView + scenePatchesCount, 0);
 		
 		unsigned int texW = 128*4;
 		unsigned int texH = 128*3;
@@ -1004,56 +1000,69 @@ void OnIdle(CGL30Driver &driver)
 
 
 		for (unsigned int i=0; i < texRes; i++) {
-			// cerna barva
+			// cerna barva nas nezajima
 			if (data[i] == 0)
 				continue;
 
-			// prevest pixel na index
-			unsigned int ind = Colors::index(data[i]);
-			
-			/*
-			// prvni vkladani
-			if (patchesInView.find(ind) == patchesInView.end())
-				patchesInView[ind] = 0;
-			*/
+			// prevest pixel na index; id patche je o jedno mensi
+			unsigned int ind = Colors::index(data[i]) - 1;
 
 			// pricist vyskyt
 			patchesInView[ind] += 1;
 		}
 		
+		// mapovat buffer do pameti; pri problemech pouzit pomalejsi zpusob
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
-		
-		//Patch emitter = scene.getPatch(patchId); // patch ze ktereho se koukalo
+		uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+		bool useBuffer = (buffer != NULL);
+
+
+		Patch* emitter = scenePatches[patchId]; // patch ze ktereho se koukalo
 
 		// obnovit hodnoty ve VBO
-		for (map<unsigned int, unsigned int>::iterator it = patchesInView.begin(); it!=patchesInView.end(); it++) {
-			// hodnota v iteratoru je id barvy, a jelikoz cernou nepocitame, ma nulty patch barvu s indexem 1
-			unsigned int updatedPatchId = (*it).first - 1; 
+		for (unsigned int i = 0; i < scenePatchesCount; i++) {
 
-			cout << "patch " << updatedPatchId << ": " << (*it).second << endl;
-			
-			Patch p = scene.getPatch(updatedPatchId);
-			p.illumination += Color4f(0.5f, 0.5f, 0.5f, 1.0f);
-			
-			unsigned int offset = (updatedPatchId) * 4; // kazdy patch ma 4 vrcholy - 4 stejne barvy
-			uint32_t newColor = Colors::packColor( Vector3f(p.illumination.x, p.illumination.y, p.illumination.z) );
+			// neviditelne patche nas nezajimaji
+			if (patchesInView[i] == 0)
+				continue;
+
+			Patch* p = scenePatches[i]; // osetrit pro nesmyslne barvy
+			float mult = 1.0f / 46000.0f;
+			float c = mult * patchesInView[i];
+			p->illumination = Vector3f(c, c, c);
+
+			unsigned int offset = i * 4; // kazdy patch ma 4 vrcholy - 4 stejne barvy
+			uint32_t newColor = Colors::packColor(p->illumination);
+
 			uint32_t newData[4] = {
 				newColor,
 				newColor,
 				newColor,
 				newColor
 			};
-			
-			glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-			
+
+			if (useBuffer)
+				memcpy(buffer + offset, newData, 4*sizeof(uint32_t));
+			else
+				glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 		}
 
+		// odbindovat buffer (pokud se pouzival) - tim se zkopiruji data z mapovane pameti do GPU najednou
+		// a ne po castech, jako to dela glBufferSubData
+		if (useBuffer) {
+			// pokud se nepovede, nahradit data klasicky (obsah bufferu by jinak byl nedefinovany)
+			if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
+				glBufferSubData(GL_ARRAY_BUFFER, 0, scenePatchesCount * 4 * sizeof(uint32_t), buffer);
+		}
 
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-		delete[] data;
-
+		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat texturu
 		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu
+
+		delete[] data;	// uklidit dynamicke pameti
+		delete[] patchesInView;
+
+
+
 
 		computeRadiosity = false; // pouze jeden krok
 	}
