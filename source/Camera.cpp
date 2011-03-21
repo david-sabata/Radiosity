@@ -15,11 +15,11 @@ void Camera::Reset() {
 }
 
 
-void Camera::lookFromPatch(Patch& p, PatchLook dir) {
-	eye = p.getCenter();
+void Camera::lookFromPatch(Patch* p, PatchLook dir) {
+	eye = p->getCenter();
 
-	Vector3f normal = p.getNormal(); // vychozi normala - smer pohledu FRONT
-	Vector3f patchUp = p.getUp();	// pomocny UP vektor patche
+	Vector3f normal = p->getNormal(); // vychozi normala - smer pohledu FRONT
+	Vector3f patchUp = p->getUp();	// pomocny UP vektor patche
 
 	// podle smeru pohledu upravit normalu a up vektor
 	switch (dir) {

@@ -25,7 +25,7 @@ class Camera {
 
 		Camera(void);
 		void Reset();
-		void lookFromPatch(Patch& p, PatchLook dir);
+		void lookFromPatch(Patch* p, PatchLook dir);
 		void Move(float x, float y, float z);		
 		void Aim(float vertical_angle, float horizontal_angle);
 		Matrix4f GetMatrix();
