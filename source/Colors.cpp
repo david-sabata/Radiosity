@@ -8,6 +8,9 @@
 short Colors::bits[3] = { 10, 10, 10 }; // vychozi hodnota, lze nastavit Colors::setBits
 short Colors::shift[3] = {};
 unsigned int Colors::mask[3] = {};
+unsigned int Colors::revMask[3] = {};
+
+unsigned int Colors::correction = 0;
 
 unsigned int Colors::range = 0;
 
@@ -61,13 +64,18 @@ void Colors::setNeededColors(unsigned int colors) {
 	mask[GREEN] <<= bits[RED] - zr;
 	mask[BLUE] <<= bits[RED] - zr + bits[GREEN] - zg;
 	shift[GREEN] -= bits[RED] - zr;
-	shift[BLUE] -= bits[RED] - zr + bits[GREEN] - zg;	
-	
-	/*
-	shift[RED] = 0;
-	shift[GREEN] = bits[RED] - (bits[RED] - zr);
-	shift[BLUE] = bits[RED] - (bits[RED] - zr) + bits[GREEN]- (bits[GREEN] - zg);
-	*/
+	shift[BLUE] -= bits[RED] - zr + bits[GREEN] - zg;		
+
+	// masky pro zpetny prevod barva=>id
+	revMask[RED] = mask[RED] << shift[RED];
+	revMask[GREEN] = mask[GREEN] << shift[GREEN];
+	revMask[BLUE] = mask[BLUE] << shift[BLUE];
+
+	// Pri zpetnem prevodu barvy na index se projevuje chyba kterou do barvy
+	// zanasi GL tim, ze pouziva vnitrni reprezentaci ve floatech
+	unsigned int tmp = 1 + (1 << bits[RED]) + (1 << (bits[RED] + bits[GREEN]));
+	correction = (1 << (zr - 1)) | (1 << (bits[RED] + zg - 1)) | (1 << (bits[RED] + bits[GREEN] + zb - 1));
+	correction -= tmp;
 }
 
 
@@ -95,8 +103,10 @@ uint32_t Colors::color(size_t colorIndex) {
 /**
  * Vraci index odpovidajici zabalene barve - opacna operace k Colors::color()
  */
-size_t Colors::index(uint32_t color) {
-	return ( ((color & (mask[RED] << shift[RED])) >> shift[RED]) | ((color & (mask[GREEN] << shift[GREEN])) >> shift[GREEN]) | ((color & (mask[BLUE] << shift[BLUE])) >> shift[BLUE]) );
+size_t Colors::index(uint32_t color) {	
+	// ! pricist korekci (kompenzuje to, ze GL pracuje vnitrne s floatovymi barvami a pri prevodech vznikaji nepresnosti)
+	color += correction;
+	return ( ((color & revMask[RED]) >> shift[RED]) | ((color & revMask[GREEN]) >> shift[GREEN]) | ((color & revMask[BLUE]) >> shift[BLUE]) );
 }
 
 /**

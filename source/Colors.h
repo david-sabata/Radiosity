@@ -17,6 +17,9 @@ class Colors {
 		static short bits[3]; // bitove rozsahy pro kazdou z barev		
 		static short shift[3]; // posun pro vykousnuti barvy z namapovaneho intu
 		static unsigned int mask[3]; // maska pro vykousnuti barvy z namapovaneho intu
+		static unsigned int revMask[3]; // maska pro zpetny prevod z namapovaneho intu na index barvy
+
+		static unsigned int correction; // jelikoz GL vnitrne prevadi barvy vzdy na floaty, je treba pri zpetnem prevodu na index pouzit korekci
 
 		static unsigned int range;
 
