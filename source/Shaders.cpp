@@ -46,6 +46,7 @@ bool Shaders::CheckShader(GLuint n_shader_object, const char *p_s_shader_name)
 		glGetShaderInfoLog(n_shader_object, n_log_length, &n_log_length, p_s_info_log);
 		// get log string
 
+		if (!b_compiled)
 		printf("GLSL compiler (%s): %s\n", p_s_shader_name, p_s_info_log);
 		// print info log
 
@@ -90,6 +91,7 @@ bool Shaders::CheckProgram(GLuint n_program_object, const char *p_s_program_name
 		glGetProgramInfoLog(n_program_object, n_length, &n_length, p_s_info_log);
 		// get info log
 
+		if (!b_linked)
 		printf("GLSL linker (%s): %s\n", p_s_program_name, p_s_info_log);
 		// print info log
 
