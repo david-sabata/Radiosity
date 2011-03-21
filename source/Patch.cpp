@@ -1,32 +1,14 @@
 #include "Patch.h"
 
 
-Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4) {
-	Patch::vec1 = vec1;
-	Patch::vec2 = vec2;
-	Patch::vec3 = vec3;
-	Patch::vec4 = vec4;
-	Patch::reflectivity = REFLECTIVITY;
-}
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4)
+		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), color(Vector3f(0.0f, 0.0f, 0.0f)), radiosity(Vector3f(0.0f, 0.0f, 0.0f))  {}
 
-Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f color) {
-	Patch::vec1 = vec1;
-	Patch::vec2 = vec2;
-	Patch::vec3 = vec3;
-	Patch::vec4 = vec4;
-	Patch::reflectivity = REFLECTIVITY;
-	Patch::color = color;
-}
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color)
+		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), color(color), radiosity(Vector3f(0.0f, 0.0f, 0.0f)) {}
 
-Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Color4f color, float energy) {
-	Patch::vec1 = vec1;
-	Patch::vec2 = vec2;
-	Patch::vec3 = vec3;
-	Patch::vec4 = vec4;
-	Patch::reflectivity = REFLECTIVITY;
-	Patch::color = color;
-	Patch::radiosity = energy;
-}
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f energy)
+		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), color(color), radiosity(energy) {}
 
 
 Patch::~Patch(void) {
@@ -42,7 +24,7 @@ Patch::~Patch(void) {
 vector<Patch*>* Patch::divide(double area) {	
 
 	// deleni bude probihat pouze pokud patch nema pocatecni vlastni energii
-	if (radiosity > 0)
+	if (radiosity.x > 0 || radiosity.y > 0 || radiosity.z > 0)
 		return NULL;
 
 
@@ -154,7 +136,7 @@ Vector3f Patch::getNormal() {
 /**
  * Vraci vlastni barvu patche
  */
-Color4f Patch::getColor() {
+Vector3f Patch::getColor() {
 	return color;
 }
 
@@ -162,5 +144,6 @@ Color4f Patch::getColor() {
  * Vraci odrazivost povrchu
  */
 float Patch::getReflectivity() {
-	return reflectivity;
+	return REFLECTIVITY;
+	//return reflectivity;
 }

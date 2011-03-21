@@ -232,7 +232,7 @@ unsigned int ModelContainer::getHighestRadiosityPatchId() {
 
 		unsigned int pi = 0; // cislo patche v ramci modelu
 		for (vector<Patch*>::iterator pit = patches->begin(); pit != patches->end(); pit++) {
-			if (max == NULL || (*pit)->radiosity >= max->radiosity) {
+			if (max == NULL || (*pit)->radiosity.f_Length2() > max->radiosity.f_Length2()) {
 				max = (*pit);
 				i = offset + pi;
 			}
