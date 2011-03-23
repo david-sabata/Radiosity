@@ -10,7 +10,7 @@
 using namespace std;
 
 // odrazivost povrchu
-#define REFLECTIVITY 0.8f
+#define REFLECTIVITY 0.3f
 
 
 class Patch {
@@ -29,7 +29,8 @@ class Patch {
 		//Patch::Patch();
 		Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4);
 		Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color);
-		Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f energy);
+		Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f illumination);
+		Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f illumination, Vector3f radiosity);
 		~Patch(void);
 
 		vector<Patch*>* divide(double area);	// rozdeli sam sebe na mensi plosky a vraci jejich vektor

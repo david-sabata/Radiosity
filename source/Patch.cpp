@@ -1,17 +1,20 @@
 #include "Patch.h"
-/*
-Patch::Patch()
-	: vec1(Vector3f(0.0f, 0.0f, 0.0f)), vec2(Vector3f(0.0f, 0.0f, 0.0f)), vec3(Vector3f(0.0f, 0.0f, 0.0f)), vec4(Vector3f(0.0f, 0.0f, 0.0f)), 
-		color(Vector3f(0.0f, 0.0f, 0.0f)), radiosity(Vector3f(0.0f, 0.0f, 0.0f))  {}
-*/
+
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4)
-		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), color(Vector3f(0.0f, 0.0f, 0.0f)), radiosity(Vector3f(0.0f, 0.0f, 0.0f))  {}
+		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
+			color(Vector3f(0.0f, 0.0f, 0.0f)), radiosity(Vector3f(0.0f, 0.0f, 0.0f)), illumination(Vector3f(0.0f, 0.0f, 0.0f))  {}
 
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color)
-		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), color(color), radiosity(Vector3f(0.0f, 0.0f, 0.0f)) {}
+		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
+			color(color), radiosity(Vector3f(0.0f, 0.0f, 0.0f)), illumination(Vector3f(0.0f, 0.0f, 0.0f)) {}
 
-Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f energy)
-		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), color(color), radiosity(energy) {}
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f illumination)
+		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
+			color(color), illumination(illumination), radiosity(Vector3f(0.0f, 0.0f, 0.0f)) {}
+
+Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f illumination, Vector3f radiosity)
+		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
+			color(color), illumination(illumination), radiosity(radiosity) {}
 
 
 Patch::~Patch(void) {
@@ -72,10 +75,10 @@ vector<Patch*>* Patch::divide(double area) {
 
 	vector<Patch*>* patches = new vector<Patch*>;
 
-	patches->push_back( new Patch(A, AB, E, DA, this->color, this->radiosity) );
-	patches->push_back( new Patch(AB, B, BC, E, this->color, this->radiosity) );
-	patches->push_back( new Patch(BC, C, CD, E, this->color, this->radiosity) );
-	patches->push_back( new Patch(CD, D, DA, E, this->color, this->radiosity) );
+	patches->push_back( new Patch(A, AB, E, DA, this->color, this->illumination, this->radiosity) );
+	patches->push_back( new Patch(AB, B, BC, E, this->color, this->illumination, this->radiosity) );
+	patches->push_back( new Patch(BC, C, CD, E, this->color, this->illumination, this->radiosity) );
+	patches->push_back( new Patch(CD, D, DA, E, this->color, this->illumination, this->radiosity) );
 
 	//cout << "====================" << endl;
 
