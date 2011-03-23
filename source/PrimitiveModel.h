@@ -15,6 +15,7 @@ class PrimitiveModel : public Model {
 
 		const enum {
 			ROOM,
+			ROOMCLOSURE,
 			CUBE,
 			BLOCK
 		};
@@ -22,14 +23,17 @@ class PrimitiveModel : public Model {
 	private:		
 		int type;	// typ modelu - hodnota z enumu; pouze docasne
 		static const float room[];
+		static const float roomClosure[];
 		static const float cube[];
 		static const float block[];
 		static const int roomIndices[];
+		static const int roomClosureIndices[];
 		static const int cubeIndices[];
 		static const int blockIndices[];
 
 		// barvy materialu - vzdy jedna (tri floaty) barva pro ctyri po sobe jdouci vrcholy
 		static const float roomColors[];
+		static const float roomClosureColors[];
 		static const float cubeColors[];
 		static const float blockColors[];
 };

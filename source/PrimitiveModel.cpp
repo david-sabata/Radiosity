@@ -25,8 +25,19 @@ PrimitiveModel::PrimitiveModel(int type) {
 					Vector3f vec4 = Vector3f(3.430f, 5.485f, 3.320f);					
 					Vector3f col = Vector3f(1.0f, 1.0f, 1.0f);
 					Vector3f energy = Vector3f(1.0f, 1.0f, 1.0f);
-					patches->push_back( new Patch(vec1, vec2, vec3, vec4, col, energy) );
+					patches->push_back( new Patch(vec1, vec2, vec3, vec4, col, energy, energy) ); // radiativni i iluminativni
 				}
+			}
+			break;
+		case ROOMCLOSURE:			
+			{
+				int i = 0;
+				Vector3f vec1 = Vector3f(roomClosure[i], roomClosure[i+1], roomClosure[i+2]);
+				Vector3f vec2 = Vector3f(roomClosure[i+3], roomClosure[i+4], roomClosure[i+5]);
+				Vector3f vec3 = Vector3f(roomClosure[i+6], roomClosure[i+7], roomClosure[i+8]);
+				Vector3f vec4 = Vector3f(roomClosure[i+9], roomClosure[i+10], roomClosure[i+11]);
+				Vector3f col = Vector3f(roomClosureColors[0], roomClosureColors[1], roomClosureColors[2]);
+				patches->push_back( new Patch(vec1, vec2, vec3, vec4, col) );			
 			}
 			break;
 		case CUBE:
@@ -113,6 +124,18 @@ const float PrimitiveModel::roomColors[] = {
 	COLOR_WHITE,
 	COLOR_RED,
 	COLOR_GREEN
+};
+
+
+const float PrimitiveModel::roomClosure[] = {	
+	5.528f,	0.0f,	0.0f,	// predni stena uzavirajici krabici
+	0.0f,	0.0f,	0.0f,
+	0.0f,	5.488f,	0.0f,
+	5.560f,	5.488f,	0.0f,
+};
+
+const float PrimitiveModel::roomClosureColors[] = {
+	COLOR_WHITE
 };
 
 
