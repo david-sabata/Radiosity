@@ -1103,11 +1103,10 @@ void OnIdle(CGL30Driver &driver)
 			float formFactor = patchesInView[i]; // zde jsou nascitane form factory pro aktualni patch
 			Vector3f incident = emitter->radiosity * formFactor;
 
-			float refl = p->getReflectivity();
-
 			//p->illumination += incident * (1 - refl);
-			p->radiosity += incident * refl;
+			p->radiosity += incident * p->getReflectivity();
 
+			/*
 			unsigned int offset = i * 4; // kazdy patch ma 4 vrcholy - 4 stejne barvy
 			uint32_t newColor = Colors::packColor(p->illumination * p->getColor());
 			uint32_t newData[4] = {
@@ -1122,6 +1121,7 @@ void OnIdle(CGL30Driver &driver)
 				memcpy(buffer + offset, newData, 4*sizeof(uint32_t));
 			else
 				glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+			*/
 		}
 
 		// zdroj se vyzaril
@@ -1135,6 +1135,19 @@ void OnIdle(CGL30Driver &driver)
 		if (emitter->illumination.z > 1.0)
 			emitter->illumination.z = 1.0;
 		
+		uint32_t newColor = Colors::packColor(emitter->illumination * emitter->getColor());
+		uint32_t newData[4] = {
+			newColor,
+			newColor,
+			newColor,
+			newColor
+		};
+
+		// zkopirovat iluminativni energii do bufferu
+		if (useBuffer)
+			memcpy(buffer + 4*patchId, newData, 4*sizeof(uint32_t));
+		else
+			glBufferSubData(GL_ARRAY_BUFFER, patchId * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 
 		// odbindovat buffer (pokud se pouzival) - tim se zkopiruji data z mapovane pameti do GPU najednou
 		// a ne po castech, jako to dela glBufferSubData

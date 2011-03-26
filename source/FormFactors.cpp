@@ -236,20 +236,20 @@ float* precomputeHemicubeFormFactors() {
 		unsigned int y = i / TEX_W;
 
 		// pohled dopredu
-		if (x >= 128 && x < 384 && y >= 128)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor[ (y - 128) * 256 + (x - 128) ];
+		if (x >= 128 && x < 384 && y < 256)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor[ y * 256 + (x - 128) ];		
 		// pohled vlevo
-		else if (x < 128 && y >= 128)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (128 - x) * 256 + (y - 128) ];
+		else if (x < 128 && y < 256)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (128 - x) * 256 - y ];		
 		// pohled vpravo
-		else if (x >= 384 && y >= 128)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (x - 384) * 256 + (y - 128) ];
+		else if (x >= 384 && y < 256)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (x - 384) * 256 + y ];		
 		// pohled nahoru
-		else if (x < 256 && y < 128)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (128 - y) * 256 + x ];
+		else if (x < 256 && y >= 256)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (y - 256) * 256 + x ];
 		// pohled dolu
-		else if (x >= 256 && y < 128)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ y * 256 + (x - 256) ];
+		else if (x >= 256 && y >= 256)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (128 - (y - 256)) * 256 + (x - 256) ];
 	}
 
 	/*
