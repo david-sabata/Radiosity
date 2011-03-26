@@ -38,7 +38,10 @@ void ModelContainer::load() {
 		Model* cube = new PrimitiveModel( PrimitiveModel::CUBE );
 		Model* block = new PrimitiveModel( PrimitiveModel::BLOCK );
 
+		Model* roomClosure = new PrimitiveModel( PrimitiveModel::ROOMCLOSURE );
+
 		addModel(room);
+		addModel(roomClosure);
 		addModel(cube);
 		addModel(block);
 	}

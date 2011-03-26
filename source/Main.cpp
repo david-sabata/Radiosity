@@ -15,10 +15,13 @@
 #include "FrameBuffer.h"
 #include "Shaders.h"
 #include "Timer.h"
+#include "FormFactors.h"
 #include <vld.h> 
 
+using namespace std;
+
 // parametr pro subdivision
-#define MAX_PATCH_AREA 0
+#define MAX_PATCH_AREA 0.1
 
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
@@ -54,13 +57,14 @@ static GLuint n_preview_program_object, n_preview_mvp_matrix_uniform;
 // VBO pro barvy odpovidajici IDckam patchu
 static GLuint n_id_color_buffer_object; 
 
-// VBO pro zobrazovane barvy patchu (vypoctene; nemusi odpovidat barvam materialu)
-static GLuint n_patch_color_buffer_object; 
+// VBO pro vykreslovani iluminativni (barva) a radiativni energie patchu
+static GLuint n_patch_color_buffer_object, n_patch_radiative_buffer_object;
 
 // pole VAO pro kazdy interval vykreslovanych patchu
 static GLuint* n_color_array_object = NULL; 
 
-
+// pole form factoru o velikosti odpovidajici rozliseni textury hemicube
+static float* p_formfactors = NULL;
 
 // citlivosti / rychlosti pohybu
 static float mouse_sensitivity = 0.001f;
@@ -90,6 +94,11 @@ int step = 0;
 unsigned long lookFromPatch = 0;
 Camera::PatchLook lookFromPatchDir = Camera::PATCH_LOOK_FRONT;
 CGLFrameBufferObject* fbo = NULL;
+unsigned int passCounter = 0;
+bool debugOutput = false;
+
+// kreslit radiativni energie namisto iluminativnich? (TAB)
+bool b_draw_radiative = false;
 
 // spustit/pozastavit vypocet (L)
 bool computeRadiosity = false;
@@ -181,19 +190,36 @@ bool InitGLObjects() {
 		delete[] colorData;	// data jsou uz zkopirovana ve VBO
 	}
 
-	// VBO pro ulozeni zobrazovanych barev patchu (vypocitane; nemusi odpovidat barvam materialu; barvy jsou zabalene do intu)
+
+	// VBO pro ulozeni zobrazovanych barev patchu (iluminativni energie; barvy jsou zabalene do intu)
 	glGenBuffers(1, &n_patch_color_buffer_object);
 	glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
-	// na zacatku je vse cerne - jeste nebyly vyzareny zadne energie
+	// na zacatku maji iluminativni energii pouze svetla
 	{
+		Patch** patches = scene.getPatches();
 		unsigned int indCnt = scene.getPatchesCount() * 4; // pocet neopakujicich se indexu
 		uint32_t* colorData = new uint32_t[indCnt];
 		for (unsigned int i=0; i < indCnt; i++) {
-			colorData[i] = 0; // vychozi (cerna) barva
+			colorData[i] = Colors::packColor( patches[i/4]->illumination ); // vychozi illuminance patchu (maji jen svetla)
 		}
 		glBufferData(GL_ARRAY_BUFFER, indCnt * sizeof(uint32_t), colorData, GL_DYNAMIC_DRAW);
 		delete[] colorData;
 	}
+
+	// VBO pro ulozeni radiativnich energii patchu 
+	glGenBuffers(1, &n_patch_radiative_buffer_object);
+	glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
+	{
+		Patch** patches = scene.getPatches();
+		unsigned int indCnt = scene.getPatchesCount() * 4; // pocet neopakujicich se indexu
+		uint32_t* colorData = new uint32_t[indCnt];
+		for (unsigned int i=0; i < indCnt; i++) {
+			colorData[i] = Colors::packColor( patches[i/4]->radiosity );
+		}
+		glBufferData(GL_ARRAY_BUFFER, indCnt * sizeof(uint32_t), colorData, GL_DYNAMIC_DRAW);
+		delete[] colorData;
+	}
+
 
 	// VBO pro ulozeni souradnic textur - TODO: resit uz pri nacitani
 	glGenBuffers(1, &n_tex_buffer_object);	
@@ -412,6 +438,9 @@ bool InitGLObjects() {
 		return false;
 	}
 	
+
+	// predpocitat form factory
+	p_formfactors = precomputeHemicubeFormFactors();
 
 	
 	return true;
@@ -694,10 +723,24 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 				
 				// E
 				if (n_w_param == 0x45) {
+					/*
 					cout << "patch cam: " << endl;
 					patchCam.DebugDump();
 					cout << "user cam: " << endl;
 					cam.DebugDump();
+					*/
+					// vypsat patche ve scene s informacema o energiich
+					cout << "\t\tR\t\t\tI\t\t" << endl;
+					Patch** p = scene.getPatches();			
+					cout << setiosflags(ios::fixed) << setprecision(3);
+					for (unsigned int i=0; i < scene.getPatchesCount(); i++) {
+						Vector3f r = p[i]->radiosity;
+						Vector3f il = p[i]->illumination;
+						cout << i << "\t" <<
+									setw(5) << r.x << " " <<
+									setw(5) << r.y << " " <<
+									setw(5) << r.z << "\t" << il.x << " " << il.y << " " << il.z << endl;
+					}
 				}
 
 				// F
@@ -724,6 +767,32 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 						step = 0;
 					printf("step: %i\n", step);
 				}
+
+				// TAB - prepinani mezi vykreslovanim illuminativni a radiativni energie
+				if (n_w_param == 0x09) {
+					b_draw_radiative = !b_draw_radiative;
+					if (b_draw_radiative) {
+						// zmenit VBO v userview VAO na radiativni energie
+						glBindVertexArray(n_vertex_array_object);														
+						glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
+						glEnableVertexAttribArray(1);
+						glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
+						glBindVertexArray(0); 
+						cout << "radiative energies" << endl;
+					} else {
+						// zmenit VBO v userview VAO na iluminativni energie
+						glBindVertexArray(n_vertex_array_object);														
+						glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+						glEnableVertexAttribArray(1);
+						glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
+						glBindVertexArray(0); 
+						cout << "illuminative energies" << endl;
+					}					
+				}
+
+				// O
+				if (n_w_param == 0x4f)
+					debugOutput = !debugOutput;
 
 				// P
 				if (n_w_param == KEY_P) 
@@ -983,11 +1052,12 @@ void OnIdle(CGL30Driver &driver)
 
 
 	// zpracovat vyrenderovanou texturu?
-	if (computeRadiosity) {
+	if (computeRadiosity) {	
 
-		// patche v pohledu - index je cislo patche, hodnota je soucin form factoru
-		unsigned int* patchesInView = new unsigned int[scenePatchesCount];
-		fill(patchesInView, patchesInView + scenePatchesCount, 0);
+		// patche v pohledu - index je cislo patche, hodnota je soucet form factoru
+		float* patchesInView = new float[scenePatchesCount];
+		for (unsigned int i=0; i<scenePatchesCount; i++)
+			patchesInView[i] = 0.0;
 		
 		unsigned int texW = 128*4;
 		unsigned int texH = 128*3;
@@ -1007,33 +1077,39 @@ void OnIdle(CGL30Driver &driver)
 			// prevest pixel na index; id patche je o jedno mensi
 			unsigned int ind = Colors::index(data[i]) - 1;
 
-			// pricist vyskyt
-			patchesInView[ind] += 1;
+			// pokud index odpovida neexistujicimu patchi, mohl nastat problem s kartou
+			if (ind >= scenePatchesCount) {
+				cerr << "Error: unrecognized patch color! Is there a problem with the video card?" << endl;
+			} else {
+				// pricist form factor				
+				patchesInView[ind] += p_formfactors[i];
+			}
 		}
 		
 		// mapovat buffer do pameti; pri problemech pouzit pomalejsi zpusob
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 		uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
 		bool useBuffer = (buffer != NULL);
-
-
+		
 		Patch* emitter = scenePatches[patchId]; // patch ze ktereho se koukalo
 
-		// obnovit hodnoty ve VBO
+		// prenest energie
 		for (unsigned int i = 0; i < scenePatchesCount; i++) {
-
 			// neviditelne patche nas nezajimaji
-			if (patchesInView[i] == 0)
+			if (patchesInView[i] == 0.0f)
 				continue;
 
-			Patch* p = scenePatches[i]; // osetrit pro nesmyslne barvy
-			float mult = 1.0f / 46000.0f;
-			float c = mult * patchesInView[i];
-			p->illumination = Vector3f(c, c, c);
+			Patch* p = scenePatches[i];			
+			float formFactor = patchesInView[i]; // zde jsou nascitane form factory pro aktualni patch
+			Vector3f incident = emitter->radiosity * formFactor;
+
+			float refl = p->getReflectivity();
+
+			//p->illumination += incident * (1 - refl);
+			p->radiosity += incident * refl;
 
 			unsigned int offset = i * 4; // kazdy patch ma 4 vrcholy - 4 stejne barvy
-			uint32_t newColor = Colors::packColor(p->illumination);
-
+			uint32_t newColor = Colors::packColor(p->illumination * p->getColor());
 			uint32_t newData[4] = {
 				newColor,
 				newColor,
@@ -1041,11 +1117,24 @@ void OnIdle(CGL30Driver &driver)
 				newColor
 			};
 
+			// zkopirovat iluminativni energii do bufferu
 			if (useBuffer)
 				memcpy(buffer + offset, newData, 4*sizeof(uint32_t));
 			else
 				glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 		}
+
+		// zdroj se vyzaril
+		emitter->illumination += emitter->radiosity;
+		emitter->radiosity = Vector3f(0.0f, 0.0f, 0.0f);
+				
+		if (emitter->illumination.x > 1.0)
+			emitter->illumination.x = 1.0;
+		if (emitter->illumination.y > 1.0)
+			emitter->illumination.y = 1.0;
+		if (emitter->illumination.z > 1.0)
+			emitter->illumination.z = 1.0;
+		
 
 		// odbindovat buffer (pokud se pouzival) - tim se zkopiruji data z mapovane pameti do GPU najednou
 		// a ne po castech, jako to dela glBufferSubData
@@ -1055,16 +1144,55 @@ void OnIdle(CGL30Driver &driver)
 				glBufferSubData(GL_ARRAY_BUFFER, 0, scenePatchesCount * 4 * sizeof(uint32_t), buffer);
 		}
 
-		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat texturu
+		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu
+
+		// nabindovat VBO s radiativnimi energiemi a updatovat jej
+		glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
+		buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+		if (buffer != NULL) { // TODO: better!
+			for (unsigned int i=0; i < scenePatchesCount; i++) {
+				// patche kter nejsou v pohledu nebo uz nemaji radiativni energii nas nezajimaji
+				if (patchesInView[i]==0 || scenePatches[i]->radiosity.f_Length2()==0)
+					continue;
+
+				uint32_t newColor = Colors::packColor(scenePatches[i]->radiosity);
+				uint32_t newData[4] = {
+					newColor,
+					newColor,
+					newColor,
+					newColor
+				};
+
+				memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+			}
+
+			if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
+				cerr << "Chyba pri uvolneni mapovani VBO" << endl;
+		} else
+			cerr << "Chyba pri mapovani VBO" << endl;
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
+
 
 		delete[] data;	// uklidit dynamicke pameti
 		delete[] patchesInView;
 
 
 
+		// zbyvajici energie ve scene
+		float total = 0;
+		for (unsigned int i = 0; i < scenePatchesCount; i++)
+			total += scenePatches[i]->radiosity.f_Length2();
 
-		computeRadiosity = false; // pouze jeden krok
+		if (total < 0.1) {
+			if (debugOutput)
+				cout << "pass " << passCounter << ", done!" << endl;
+			computeRadiosity = false; 
+		} else if (debugOutput)
+			cout << "pass " << passCounter << ", " << setprecision(10) << total << " energy left" << endl;
+
+		passCounter++;
 	}
 
 

@@ -7,7 +7,8 @@ Camera::Camera(void) {
 
 
 void Camera::Reset() {
-	eye = Vector3f(2.78f, 2.73f, -2.5f);	
+	//eye = Vector3f(2.78f, 2.73f, -2.5f);	
+	eye = Vector3f(2.78f, 2.73f, 0.025f);
 	up = Vector3f(0.0f, 1.0f, 0.0f);		
 	target = Vector3f(0.0f, 0.0f, 1.0f);
 	angle_horiz = 0.0f;

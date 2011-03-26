@@ -30,8 +30,8 @@ Patch::~Patch(void) {
 vector<Patch*>* Patch::divide(double area) {	
 
 	// deleni bude probihat pouze pokud patch nema pocatecni vlastni energii
-	if (radiosity.x > 0 || radiosity.y > 0 || radiosity.z > 0)
-		return NULL;
+	//if (radiosity.x > 0 || radiosity.y > 0 || radiosity.z > 0)
+	//	return NULL;
 
 
 	/*

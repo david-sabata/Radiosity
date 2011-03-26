@@ -25,7 +25,7 @@ PrimitiveModel::PrimitiveModel(int type) {
 					Vector3f vec4 = Vector3f(3.430f, 5.485f, 3.320f);					
 					Vector3f col = Vector3f(1.0f, 1.0f, 1.0f);
 					Vector3f energy = Vector3f(1.0f, 1.0f, 1.0f);
-					patches->push_back( new Patch(vec1, vec2, vec3, vec4, col, energy, energy) ); // radiativni i iluminativni
+					patches->push_back( new Patch(vec1, vec2, vec3, vec4, col, energy, energy * 100) ); // radiativni i iluminativni
 				}
 			}
 			break;
