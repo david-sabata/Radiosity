@@ -249,7 +249,7 @@ float* precomputeHemicubeFormFactors() {
 			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (y - 256) * 256 + x ];
 		// pohled dolu
 		else if (x >= 256 && y >= 256)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (128 - (y - 256)) * 256 + (x - 256) ];
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (127 - (y - 256)) * 256 + (x - 256) ];
 	}
 
 	/*

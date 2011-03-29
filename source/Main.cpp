@@ -16,7 +16,6 @@
 #include "Shaders.h"
 #include "Timer.h"
 #include "FormFactors.h"
-#include <vld.h> 
 
 using namespace std;
 
@@ -503,13 +502,15 @@ void DrawScene() {
  *  @param[in] interval interval ktery se bude kreslit
  */
 void DrawPatchLook(unsigned int interval) {	
-	
+
 	int* indices = scene.getIndices();
 	float* vertices = scene.getVertices();
-				
-	glBindVertexArray(n_vertex_array_object);					
-	glVertexAttrib3f(1, 0.1f, 0.1f, 0.1f); // vse cerne
-			
+
+	if (patchIntervals.size() > 1) {
+		glBindVertexArray(n_vertex_array_object);
+		glVertexAttrib3f(1, 0.0f, 0.0f, 0.0f); // vse cerne
+	}
+
 	// vykreslit cerne vse pred aktivnim intervalem
 	if (interval > 0) {
 		int fromIndex = 0;
@@ -1065,7 +1066,7 @@ void OnIdle(CGL30Driver &driver)
 
 		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); // nabindovat texturu
 
-		unsigned int* data = new unsigned int[texRes];
+		unsigned int* data = new unsigned int[texRes]; // alokovat predem
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
 
 
@@ -1126,7 +1127,7 @@ void OnIdle(CGL30Driver &driver)
 		};
 
 		glBufferSubData(GL_ARRAY_BUFFER, patchId * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-
+		
 		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu
 
@@ -1157,7 +1158,7 @@ void OnIdle(CGL30Driver &driver)
 			cerr << "Chyba pri mapovani VBO" << endl;
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
-
+		
 
 		delete[] data;	// uklidit dynamicke pameti
 		delete[] patchesInView;
