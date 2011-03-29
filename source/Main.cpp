@@ -1088,8 +1088,6 @@ void OnIdle(CGL30Driver &driver)
 		
 		// mapovat buffer do pameti; pri problemech pouzit pomalejsi zpusob
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
-		uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-		bool useBuffer = (buffer != NULL);
 		
 		Patch* emitter = scenePatches[patchId]; // patch ze ktereho se koukalo
 
@@ -1103,25 +1101,9 @@ void OnIdle(CGL30Driver &driver)
 			float formFactor = patchesInView[i]; // zde jsou nascitane form factory pro aktualni patch
 			Vector3f incident = emitter->radiosity * formFactor;
 
-			//p->illumination += incident * (1 - refl);
+			//incident += emitter->radiosity * emitter->getColor() * 0.001;
+
 			p->radiosity += incident * p->getReflectivity();
-
-			/*
-			unsigned int offset = i * 4; // kazdy patch ma 4 vrcholy - 4 stejne barvy
-			uint32_t newColor = Colors::packColor(p->illumination * p->getColor());
-			uint32_t newData[4] = {
-				newColor,
-				newColor,
-				newColor,
-				newColor
-			};
-
-			// zkopirovat iluminativni energii do bufferu
-			if (useBuffer)
-				memcpy(buffer + offset, newData, 4*sizeof(uint32_t));
-			else
-				glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-			*/
 		}
 
 		// zdroj se vyzaril
@@ -1143,26 +1125,15 @@ void OnIdle(CGL30Driver &driver)
 			newColor
 		};
 
-		// zkopirovat iluminativni energii do bufferu
-		if (useBuffer)
-			memcpy(buffer + 4*patchId, newData, 4*sizeof(uint32_t));
-		else
-			glBufferSubData(GL_ARRAY_BUFFER, patchId * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-
-		// odbindovat buffer (pokud se pouzival) - tim se zkopiruji data z mapovane pameti do GPU najednou
-		// a ne po castech, jako to dela glBufferSubData
-		if (useBuffer) {
-			// pokud se nepovede, nahradit data klasicky (obsah bufferu by jinak byl nedefinovany)
-			if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
-				glBufferSubData(GL_ARRAY_BUFFER, 0, scenePatchesCount * 4 * sizeof(uint32_t), buffer);
-		}
+		glBufferSubData(GL_ARRAY_BUFFER, patchId * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu
 
+
 		// nabindovat VBO s radiativnimi energiemi a updatovat jej
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
-		buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+		uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
 		if (buffer != NULL) { // TODO: better!
 			for (unsigned int i=0; i < scenePatchesCount; i++) {
 				// patche kter nejsou v pohledu nebo uz nemaji radiativni energii nas nezajimaji
