@@ -19,7 +19,7 @@
 #include "Shaders.h"
 #include "Timer.h"
 #include "FormFactors.h"
-#include "OCL.h"
+
 
 using namespace std;
 
@@ -479,11 +479,13 @@ bool InitCLObjects() {
 	   return false;
 	}
 	// Device
-	error = clGetDeviceIDs(ocl_platform, CL_DEVICE_TYPE_GPU, 1, &ocl_device, NULL);
+	cl_uint cnt;
+	error = clGetDeviceIDs(ocl_platform, CL_DEVICE_TYPE_GPU, 1, &ocl_device, &cnt);
 	if (error != CL_SUCCESS) {
 	   cerr << "Error getting device ids: " << errorMessage(error) << endl;
 	   return false;
 	}
+	cout << "devices count: " << cnt << endl;
 	// Context
 	ocl_context = clCreateContext(0, 1, &ocl_device, NULL, NULL, &error);
 	if (error != CL_SUCCESS) {
@@ -548,8 +550,7 @@ bool InitCLObjects() {
 	short* shifts = Colors::getShifts();
 	unsigned int* rMasks = Colors::getRevMasks();
 	ostringstream opts(ostringstream::out);
-	//opts << "#define unpack(c) ( (((c) & " << rMasks[0] << ") >> " << shifts[0] << ") | (((c) & " << rMasks[1] << ") >> " << shifts[1] << ") | (((c) & " << rMasks[2] << ") >> " << shifts[2] << ") )" << endl;
-	opts << "#define unpack(c) ((c) & " << rMasks[0] << ")" << endl;
+	opts << "#define unpack(c) ( (((c) & " << rMasks[0] << ") >> " << shifts[0] << ") | (((c) & " << rMasks[1] << ") >> " << shifts[1] << ") | (((c) & " << rMasks[2] << ") >> " << shifts[2] << ") )" << endl;	
 	opts << "#define correction " << Colors::getCorrection() << endl;
 	
 	string src = opts.str() + string(source, filesize);
@@ -635,6 +636,31 @@ bool InitCLObjects() {
 	   return false;
 	}
 		
+	unsigned int texW = 128*4;
+	unsigned int texH = 128*3;
+	unsigned int spanLength = texW;
+
+	// nastavit argumenty kernelu	
+	error  = clSetKernelArg (ocl_kernel, 0, sizeof(cl_mem), &ocl_arg_ids);
+	error |= clSetKernelArg (ocl_kernel, 1, sizeof(cl_mem), &ocl_arg_energies);
+	error |= clSetKernelArg (ocl_kernel, 2, sizeof(cl_mem), &ocl_arg_writeindex);
+	error |= clSetKernelArg (ocl_kernel, 3, sizeof(cl_mem), &ocl_arg_patchview);
+	error |= clSetKernelArg (ocl_kernel, 4, sizeof(cl_mem), &ocl_arg_ffactors);
+	error |= clSetKernelArg (ocl_kernel, 5, sizeof(unsigned int), &texW);
+	error |= clSetKernelArg (ocl_kernel, 6, sizeof(unsigned int), &texH);
+	error |= clSetKernelArg (ocl_kernel, 7, sizeof(unsigned int), &spanLength);
+	if (error != CL_SUCCESS) {
+		cerr << "error: can't set up ProcessHemicube kernel arguments" << endl;
+		return false;
+	}
+
+	// naplnit buffer argumentu - pole s formfactory - konstantni po celou dobu
+	error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_ffactors, CL_TRUE, 0, texRes*sizeof(float), p_formfactors,
+ 					0, NULL, NULL);
+	if (error != CL_SUCCESS) {
+		cerr << "error: can't write to ocl_arg_ffactors buffer" << endl;
+		return false;
+	}
 
 	cout << "OpenCL init OK" << endl;
 	return true;
@@ -1276,49 +1302,34 @@ void OnIdle(CGL30Driver &driver)
 
 	// zpracovat vyrenderovanou texturu?
 	if (computeRadiosity) {	
-
-		// patche v pohledu - index je cislo patche, hodnota je soucet form factoru
-		float* patchesInView = new float[scenePatchesCount];
-		for (unsigned int i=0; i<scenePatchesCount; i++)
-			patchesInView[i] = 0.0;
 		
 		unsigned int texW = 128*4;
 		unsigned int texH = 128*3;
 		unsigned int texRes = texW * texH;
 		unsigned int spanLength = texW;
-
-		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); // nabindovat texturu
-
+		
+		// ziskat data z textury
 		unsigned int* data = new unsigned int[texRes]; // alokovat predem
+		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); 
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
-
+		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu, data uz jsou zkopirovana
+		
 		cl_int error = 0;
 
-		// naplnit buffery - argumenty kernelu		
-		error  = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, texRes*sizeof(uint32_t), data,
- 					0, NULL, NULL);
-		error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_ffactors, CL_TRUE, 0, texRes*sizeof(float), p_formfactors,
- 					0, NULL, NULL);
+		// naplnit buffer kernelu texturou pohledu
+		error  = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, texRes*sizeof(uint32_t), data, 0, NULL, NULL);
+		delete[] data;	// uz jsou v bufferu
+		
+
+		// vynulovat index na ktery se zapisuje - nutne v kazde iteraci!
 		{
 			unsigned int writeindex = 0;
-			error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &writeindex,
- 					0, NULL, NULL);
+			error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &writeindex,	0, NULL, NULL);
 		}
-		_ASSERT(error == CL_SUCCESS);
-
-		
-		error  = clSetKernelArg (ocl_kernel, 0, sizeof(cl_mem), &ocl_arg_ids);
-		error |= clSetKernelArg (ocl_kernel, 1, sizeof(cl_mem), &ocl_arg_energies);
-		error |= clSetKernelArg (ocl_kernel, 2, sizeof(cl_mem), &ocl_arg_writeindex);
-		error |= clSetKernelArg (ocl_kernel, 3, sizeof(cl_mem), &ocl_arg_patchview);
-		error |= clSetKernelArg (ocl_kernel, 4, sizeof(cl_mem), &ocl_arg_ffactors);
-		error |= clSetKernelArg (ocl_kernel, 5, sizeof(unsigned int), &texW);
-		error |= clSetKernelArg (ocl_kernel, 6, sizeof(unsigned int), &texH);
-		error |= clSetKernelArg (ocl_kernel, 7, sizeof(unsigned int), &spanLength);
-		_ASSERT(error == CL_SUCCESS);
+		_ASSERT(error == CL_SUCCESS);		
 
 		// pocet instanci programu		
-		const unsigned int global_work_size[] = { 1, 128*3 };
+		const unsigned int global_work_size[] = { 4, 128*3 };
 		
 		// spustit program!
 		error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL,
@@ -1327,12 +1338,13 @@ void OnIdle(CGL30Driver &driver)
 			0, NULL, NULL);		
 		_ASSERT(error == CL_SUCCESS);
 
-
+		
 		// zjistit kolik polygonu*instanci se ulozilo (pocet je vzdy ruzny v zavislosti na pohledu a rozlozeni work-items)
 		unsigned int n_last_index = 0;
 		error = clEnqueueReadBuffer (ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &n_last_index, 0, NULL, NULL);
 		_ASSERT(error == CL_SUCCESS);
 
+		// alokovat podle potreby (poctu indexu na ktere se zapsalo)
 		uint32_t* p_pids = new uint32_t[n_last_index];
 		float* p_energies = new float[n_last_index];
 
@@ -1341,26 +1353,23 @@ void OnIdle(CGL30Driver &driver)
 		error |= clEnqueueReadBuffer (ocl_queue, ocl_arg_energies, CL_TRUE, 0, n_last_index*sizeof(float), p_energies, 0, NULL, NULL);		
 		_ASSERT(error == CL_SUCCESS);
 
-		clFinish(ocl_queue);
-
 
 		// mapovat buffer do pameti; pri problemech pouzit pomalejsi zpusob
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 		
 		Patch* emitter = scenePatches[patchId]; // patch ze ktereho se koukalo
 
+		
 		// prenest energie
 		for (unsigned int i = 0; i < n_last_index; i++) {			
 
-			unsigned int patchId = Colors::index(p_pids[i]) - 1;
-			if (patchId >= scenePatchesCount) {
-				cerr << "! warning !\t uknown patch id: " << patchId << endl;
+			if (p_pids[i] >= scenePatchesCount) {
+				cerr << "! warning !\t uknown patch id: " << p_pids[i] << endl;
 				continue;
 			}
 
-			Patch* p = scenePatches[patchId];			
-			Vector3f incident = emitter->radiosity * p_energies[i];
-			p->radiosity += incident * p->getReflectivity();
+			Patch* p = scenePatches[p_pids[i]];			
+			p->radiosity += emitter->radiosity * p_energies[i] * p->getReflectivity();
 		}
 
 		// zdroj se vyzaril
@@ -1385,7 +1394,6 @@ void OnIdle(CGL30Driver &driver)
 		glBufferSubData(GL_ARRAY_BUFFER, patchId * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 		
 		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
-		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu
 		
 		
 		// nabindovat VBO s radiativnimi energiemi a updatovat jej
@@ -1416,12 +1424,12 @@ void OnIdle(CGL30Driver &driver)
 		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		
 
-		delete[] data;	// uklidit dynamicke pameti
-		delete[] patchesInView;
-		
+		// uklidit
 		delete[] p_pids;
 		delete[] p_energies;
 
+
+		
 		// zbyvajici energie ve scene
 		float total = 0;
 		for (unsigned int i = 0; i < scenePatchesCount; i++)
@@ -1433,7 +1441,7 @@ void OnIdle(CGL30Driver &driver)
 			computeRadiosity = false; 
 		} else if (debugOutput)	
 			cout << "pass " << passCounter << ", " << setprecision(10) << total << " energy left" << endl;
-
+		
 		passCounter++;
 		//computeRadiosity = false;
 	}

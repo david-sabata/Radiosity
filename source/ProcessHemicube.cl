@@ -34,8 +34,8 @@ __kernel void ProcessHemicube(
 
 	   if (n_patch_id > 0) { // cerne patche nebrat - zrejme nepresne uzavreny prostor
 		unsigned int n_write_id = atomic_inc(p_write_index);
-		//p_ids[n_write_id] = unpack(n_patch_id + correction);
-		p_ids[n_write_id] = n_patch_id;
+		p_ids[n_write_id] = unpack(n_patch_id + correction) - 1;
+		//p_ids[n_write_id] = n_patch_id;
 		p_energies[n_write_id] = f_energy;
 		// zapsat energii do globalniho pole
 		// n_write_id je index do poli p_ids a p_energies, ktere spolecne tvori mapu patch_id => energy
