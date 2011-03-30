@@ -6,7 +6,10 @@
 #include <vector>
 #include <map>
 #include <list>
+#include <iostream>
+#include <sstream>
 #include "OpenGL30Drv.h"
+#include "opencl.h"
 #include "Transform.h"
 #include "Tga.h"
 #include "Camera.h"
@@ -16,6 +19,7 @@
 #include "Shaders.h"
 #include "Timer.h"
 #include "FormFactors.h"
+#include "OCL.h"
 
 using namespace std;
 
@@ -64,6 +68,21 @@ static GLuint* n_color_array_object = NULL;
 
 // pole form factoru o velikosti odpovidajici rozliseni textury hemicube
 static float* p_formfactors = NULL;
+
+// CL objekty
+//static cl_int ocl_error = 0;
+static cl_platform_id ocl_platform;
+static cl_kernel ocl_kernel;
+static cl_context ocl_context;
+static cl_command_queue ocl_queue;
+static cl_device_id ocl_device;
+static uint32_t* ocl_data_patchids;
+static float* ocl_data_formfactors;
+
+// CL argumenty programu
+cl_mem ocl_arg_ids, ocl_arg_energies, ocl_arg_writeindex, ocl_arg_patchview, 
+	ocl_arg_ffactors, ocl_arg_width, ocl_arg_height, ocl_arg_span_length;
+
 
 // citlivosti / rychlosti pohybu
 static float mouse_sensitivity = 0.001f;
@@ -445,6 +464,182 @@ bool InitGLObjects() {
 	return true;
 }
 
+int errorMessage(cl_int e) { cout << e; return e; }
+
+/**
+ *  @brief vytvori vsechny OpenCL objekty, potrebne pro vypocty na GPU
+ *  @return vraci true pri uspechu, false pri neuspechu
+ */
+bool InitCLObjects() {
+	
+	// Platform
+	cl_int error = clGetPlatformIDs(1, &ocl_platform, NULL);
+	if (error != CL_SUCCESS) {
+	   cerr << "Error getting platform id: " << errorMessage(error) << endl;
+	   return false;
+	}
+	// Device
+	error = clGetDeviceIDs(ocl_platform, CL_DEVICE_TYPE_GPU, 1, &ocl_device, NULL);
+	if (error != CL_SUCCESS) {
+	   cerr << "Error getting device ids: " << errorMessage(error) << endl;
+	   return false;
+	}
+	// Context
+	ocl_context = clCreateContext(0, 1, &ocl_device, NULL, NULL, &error);
+	if (error != CL_SUCCESS) {
+	   cerr << "Error creating context: " << errorMessage(error) << endl;
+	   return false;
+	}
+	// Command-queue
+	ocl_queue = clCreateCommandQueue(ocl_context, ocl_device, 0, &error);
+	if (error != CL_SUCCESS) {
+	   cerr << "Error creating command queue: " << errorMessage(error) << endl;
+	   return false;
+	}
+	
+
+	unsigned int texRes = 128*4*128*3;
+
+	ocl_data_patchids = new uint32_t[texRes];
+	ocl_data_formfactors = new float[texRes];
+	
+	// pole ID patchu a jejich energii (na shodnych indexech)
+	ocl_arg_ids = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, texRes*sizeof(uint32_t), ocl_data_patchids, &error);
+	ocl_arg_energies = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, texRes*sizeof(float), ocl_data_formfactors, &error);
+	
+	// index do ID patchu a energii, sdileny mezi instacemi, atomicky posouvany
+	unsigned int firstIndex = 0;
+	ocl_arg_writeindex = clCreateBuffer(ocl_context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int), &firstIndex, &error);
+
+	// data textury pohledu z nejakeho patche
+	ocl_arg_patchview = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, texRes*sizeof(unsigned int), NULL, &error);
+
+	// data 'textury' form factoru
+	ocl_arg_ffactors = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, texRes*sizeof(float), NULL, &error);
+
+	// rozmery textur
+	ocl_arg_width = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, sizeof(unsigned int), NULL, &error);
+	ocl_arg_height = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, sizeof(unsigned int), NULL, &error);
+
+	// delka jedne scanline (delka linky, kterou bude zpracovavat jedna instance programu)	
+	ocl_arg_span_length = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, sizeof(unsigned int), NULL, &error);
+
+
+
+
+	FILE* fp = fopen("ProcessHemicube.cl", "rb");
+	if (fp == NULL) {
+		cerr << "error: can't open OpenCL source file" << endl;
+		return false;
+	}
+	fseek(fp, 0, SEEK_END);
+	size_t filesize = ftell(fp);
+	rewind(fp);
+	
+	char* source = new char[filesize];
+	if (fread(source, sizeof(char), filesize, fp) != filesize) {
+		cerr << "error: can't read OpenCL source file" << endl;
+		return false;
+	}
+	fclose(fp);	
+	
+	// pridat makro na rozbaleni UINT_2_10_10_10_REV do indexu barvy (Colors::index)
+	// pres parametr pri kompilaci to nejak nefunguje
+	short* shifts = Colors::getShifts();
+	unsigned int* rMasks = Colors::getRevMasks();
+	ostringstream opts(ostringstream::out);
+	//opts << "#define unpack(c) ( (((c) & " << rMasks[0] << ") >> " << shifts[0] << ") | (((c) & " << rMasks[1] << ") >> " << shifts[1] << ") | (((c) & " << rMasks[2] << ") >> " << shifts[2] << ") )" << endl;
+	opts << "#define unpack(c) ((c) & " << rMasks[0] << ")" << endl;
+	opts << "#define correction " << Colors::getCorrection() << endl;
+	
+	string src = opts.str() + string(source, filesize);
+	const char* sourceStr = src.c_str();
+	size_t sourceSize = src.size();
+
+	// vytvorit program
+	cl_program ocl_program = clCreateProgramWithSource(
+				  ocl_context,
+                  1,   // number of files
+				  &sourceStr,   // array of strings, each one is a file
+				  &sourceSize,   // array specifying the file lengths
+                  &error);   // error code to be returned
+	if (error != CL_SUCCESS) {
+	   cerr << "Error creating program: " << errorMessage(error) << endl;
+	   return false;
+	}
+
+
+	// zarizeni, pro ktera se bude program kompilovat
+	const cl_device_id device_list[] = { ocl_device };
+	
+
+	// zkompilovat program
+	//error = clBuildProgram(ocl_program, 1, device_list, options.c_str(), NULL, NULL);
+	error = clBuildProgram(ocl_program, 1, device_list, "", NULL, NULL);
+	if (error != CL_SUCCESS) {
+		cerr << "error: can't compile OpenCL program - ";
+		switch (error) {
+			case CL_INVALID_PROGRAM:
+				cerr << "INVALID_PROGRAM";
+				break;
+			case CL_INVALID_VALUE:
+				cerr << "INVALID_VALUE";
+				break;
+			case CL_INVALID_DEVICE:
+				cerr << "INVALID_DEVICE";
+				break;
+			case CL_INVALID_BINARY:
+				cerr << "INVALID_BINARY";
+				break;
+			case CL_INVALID_BUILD_OPTIONS:
+				cerr << "INVALID_BUILD_OPTIONS";
+				break;
+			case CL_INVALID_OPERATION:
+				cerr << "INVALID_OPERATION";
+				break;
+			case CL_COMPILER_NOT_AVAILABLE:
+				cerr << "COMPILER_NOT_AVAILABLE";
+				break;
+			case CL_BUILD_PROGRAM_FAILURE:
+				cerr << "BUILD_PROGRAM_FAILURE";
+				break;
+			case CL_OUT_OF_HOST_MEMORY:
+				cerr << "OUT_OF_HOST_MEMORY";
+				break;
+		}
+		cerr << endl;
+
+		// compile log
+		char* build_log;
+		size_t log_size;
+
+		// First call to know the proper size
+		clGetProgramBuildInfo(ocl_program, device_list[0], CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+		build_log = new char[log_size+1];
+	
+		// Second call to get the log
+		clGetProgramBuildInfo(ocl_program, device_list[0], CL_PROGRAM_BUILD_LOG, log_size, build_log, NULL);
+		build_log[log_size] = '\0';
+		cout << build_log << endl;
+		delete[] build_log;
+
+		return false;
+	}
+	delete[] source;
+	
+
+	// ziskat vstupni bod programu (kernel)
+	ocl_kernel = clCreateKernel (ocl_program, "ProcessHemicube", &error);
+	if (error != CL_SUCCESS) {
+	   cerr << "error: can't extract ProcessHemicube kernel" << endl;
+	   return false;
+	}
+		
+
+	cout << "OpenCL init OK" << endl;
+	return true;
+}
+
 /**
  *	@brief uvolni vsechny OpenGL objekty
  */
@@ -465,6 +660,24 @@ void CleanupGLObjects()
 
 	delete fbo;
 	// smaze pokusny buffer
+}
+
+
+/**
+ *  @brief uvolni vsechny OpenCL objekty
+ */
+void CleanupCLObjects() {
+	clReleaseKernel(ocl_kernel);
+	clReleaseCommandQueue(ocl_queue);
+	clReleaseContext(ocl_context);
+	clReleaseMemObject(ocl_arg_ids);
+	clReleaseMemObject(ocl_arg_energies);
+	clReleaseMemObject(ocl_arg_writeindex);
+	clReleaseMemObject(ocl_arg_patchview);
+	clReleaseMemObject(ocl_arg_ffactors);
+	clReleaseMemObject(ocl_arg_width);
+	clReleaseMemObject(ocl_arg_height);
+	clReleaseMemObject(ocl_arg_span_length);	
 }
 
 /**
@@ -635,9 +848,15 @@ int main(int n_arg_num, const char **p_arg_list)
 
 	// vyrobime objekty OpenGL, nutne ke kresleni
 	if(!InitGLObjects()) {
-		fprintf(stderr, "error: failed to initialize OpenGL objects\n"); // neco se nepovedlo (chyba pri kompilaci shaderu / chyba pri nacitani obrazku textury)
+		cerr << "error: failed to initialize OpenGL objects" << endl; // neco se nepovedlo (chyba pri kompilaci shaderu / chyba pri nacitani obrazku textury)
 		return -1;
 	}		
+
+	// vyrobime objekty OpenCL
+	if(!InitCLObjects()) {
+		cerr << "error: failed to initialize OpenCL objects" << endl;
+		return -1;
+	}	
 
 	// skryt kurzor mysi
 	ShowCursor(false);
@@ -685,6 +904,9 @@ int main(int n_arg_num, const char **p_arg_list)
 
 	// uvolnime OpenGL objekty
 	CleanupGLObjects();	
+
+	// uvolnime OpenCL objekty
+	CleanupCLObjects();
 
 	// znovu zobrazit kurzor mysi
 	ShowCursor(true);
@@ -1063,47 +1285,81 @@ void OnIdle(CGL30Driver &driver)
 		unsigned int texW = 128*4;
 		unsigned int texH = 128*3;
 		unsigned int texRes = texW * texH;
+		unsigned int spanLength = texW;
 
 		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); // nabindovat texturu
 
 		unsigned int* data = new unsigned int[texRes]; // alokovat predem
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
 
+		cl_int error = 0;
 
-		for (unsigned int i=0; i < texRes; i++) {
-			// cerna barva nas nezajima
-			if (data[i] == 0)
-				continue;
-
-			// prevest pixel na index; id patche je o jedno mensi
-			unsigned int ind = Colors::index(data[i]) - 1;
-
-			// pokud index odpovida neexistujicimu patchi, mohl nastat problem s kartou
-			if (ind >= scenePatchesCount) {
-				cerr << "Error: unrecognized patch color! Is there a problem with the video card?" << endl;
-			} else {
-				// pricist form factor				
-				patchesInView[ind] += p_formfactors[i];
-			}
+		// naplnit buffery - argumenty kernelu		
+		error  = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, texRes*sizeof(uint32_t), data,
+ 					0, NULL, NULL);
+		error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_ffactors, CL_TRUE, 0, texRes*sizeof(float), p_formfactors,
+ 					0, NULL, NULL);
+		{
+			unsigned int writeindex = 0;
+			error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &writeindex,
+ 					0, NULL, NULL);
 		}
+		_ASSERT(error == CL_SUCCESS);
+
 		
+		error  = clSetKernelArg (ocl_kernel, 0, sizeof(cl_mem), &ocl_arg_ids);
+		error |= clSetKernelArg (ocl_kernel, 1, sizeof(cl_mem), &ocl_arg_energies);
+		error |= clSetKernelArg (ocl_kernel, 2, sizeof(cl_mem), &ocl_arg_writeindex);
+		error |= clSetKernelArg (ocl_kernel, 3, sizeof(cl_mem), &ocl_arg_patchview);
+		error |= clSetKernelArg (ocl_kernel, 4, sizeof(cl_mem), &ocl_arg_ffactors);
+		error |= clSetKernelArg (ocl_kernel, 5, sizeof(unsigned int), &texW);
+		error |= clSetKernelArg (ocl_kernel, 6, sizeof(unsigned int), &texH);
+		error |= clSetKernelArg (ocl_kernel, 7, sizeof(unsigned int), &spanLength);
+		_ASSERT(error == CL_SUCCESS);
+
+		// pocet instanci programu		
+		const unsigned int global_work_size[] = { 1, 128*3 };
+		
+		// spustit program!
+		error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL,
+			global_work_size, 
+			NULL, 
+			0, NULL, NULL);		
+		_ASSERT(error == CL_SUCCESS);
+
+
+		// zjistit kolik polygonu*instanci se ulozilo (pocet je vzdy ruzny v zavislosti na pohledu a rozlozeni work-items)
+		unsigned int n_last_index = 0;
+		error = clEnqueueReadBuffer (ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &n_last_index, 0, NULL, NULL);
+		_ASSERT(error == CL_SUCCESS);
+
+		uint32_t* p_pids = new uint32_t[n_last_index];
+		float* p_energies = new float[n_last_index];
+
+		// precist data
+		error  = clEnqueueReadBuffer (ocl_queue, ocl_arg_ids, CL_TRUE, 0, n_last_index*sizeof(uint32_t), p_pids, 0, NULL, NULL);
+		error |= clEnqueueReadBuffer (ocl_queue, ocl_arg_energies, CL_TRUE, 0, n_last_index*sizeof(float), p_energies, 0, NULL, NULL);		
+		_ASSERT(error == CL_SUCCESS);
+
+		clFinish(ocl_queue);
+
+
 		// mapovat buffer do pameti; pri problemech pouzit pomalejsi zpusob
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 		
 		Patch* emitter = scenePatches[patchId]; // patch ze ktereho se koukalo
 
 		// prenest energie
-		for (unsigned int i = 0; i < scenePatchesCount; i++) {
-			// neviditelne patche nas nezajimaji
-			if (patchesInView[i] == 0.0f)
+		for (unsigned int i = 0; i < n_last_index; i++) {			
+
+			unsigned int patchId = Colors::index(p_pids[i]) - 1;
+			if (patchId >= scenePatchesCount) {
+				cerr << "! warning !\t uknown patch id: " << patchId << endl;
 				continue;
+			}
 
-			Patch* p = scenePatches[i];			
-			float formFactor = patchesInView[i]; // zde jsou nascitane form factory pro aktualni patch
-			Vector3f incident = emitter->radiosity * formFactor;
-
-			//incident += emitter->radiosity * emitter->getColor() * 0.001;
-
+			Patch* p = scenePatches[patchId];			
+			Vector3f incident = emitter->radiosity * p_energies[i];
 			p->radiosity += incident * p->getReflectivity();
 		}
 
@@ -1130,15 +1386,15 @@ void OnIdle(CGL30Driver &driver)
 		
 		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu
-
-
+		
+		
 		// nabindovat VBO s radiativnimi energiemi a updatovat jej
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
 		uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
 		if (buffer != NULL) { // TODO: better!
 			for (unsigned int i=0; i < scenePatchesCount; i++) {
 				// patche kter nejsou v pohledu nebo uz nemaji radiativni energii nas nezajimaji
-				if (patchesInView[i]==0 || scenePatches[i]->radiosity.f_Length2()==0)
+				if (scenePatches[i]->radiosity.f_Length2()==0)
 					continue;
 
 				uint32_t newColor = Colors::packColor(scenePatches[i]->radiosity);
@@ -1162,8 +1418,9 @@ void OnIdle(CGL30Driver &driver)
 
 		delete[] data;	// uklidit dynamicke pameti
 		delete[] patchesInView;
-
-
+		
+		delete[] p_pids;
+		delete[] p_energies;
 
 		// zbyvajici energie ve scene
 		float total = 0;
@@ -1174,10 +1431,11 @@ void OnIdle(CGL30Driver &driver)
 			if (debugOutput)
 				cout << "pass " << passCounter << ", done!" << endl;
 			computeRadiosity = false; 
-		} else if (debugOutput)
+		} else if (debugOutput)	
 			cout << "pass " << passCounter << ", " << setprecision(10) << total << " energy left" << endl;
 
 		passCounter++;
+		//computeRadiosity = false;
 	}
 
 

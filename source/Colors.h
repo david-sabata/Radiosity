@@ -34,6 +34,10 @@ class Colors {
 		static void setBits(unsigned short r, unsigned short g, unsigned short b);
 		static void setNeededColors(unsigned int colors);
 
+		static unsigned int getCorrection();
+		static unsigned int* getRevMasks();
+		static short* getShifts();
+
 		static unsigned int getColorRange();
 		static uint32_t* getUniqueColors();
 		static uint32_t* getIndicesColors();
