@@ -2,13 +2,13 @@
 
 #define Pi (3.1415926535897932384626433832795028841931f)
 
-static const int n_hemicube_size = 256;
+static const int n_hemicube_size = HEMICUBE_W;
 static float f_hemicube_max = 1;
 
 static float p_hemicube_tmp_formfactor[n_hemicube_size * n_hemicube_size];
 static float p_hemicube_tmp_formfactor_side[n_hemicube_size * n_hemicube_size / 2];
 
-static float p_hemicube_formfactors[TEX_W * TEX_H];
+static float p_hemicube_formfactors[PATCHVIEW_TEX_RES];
 
 /**
  * Spocita factory pohledu vpred a do strany
@@ -208,15 +208,26 @@ int	Save_TrueColor_BMP(char *filename, BMP *bmp)
 
 /*
     0        256       512
-  0	* - - - - * - - - - *
+384	* - - - - * - - - - * 384
 	|         |         |
 	|   UP    |  DOWN   |
-128	* - - - - * - - - - * 128
+256	* - - - - * - - - - * 256
 	|     |       |     |
 	| LFT | FRONT | RGT |
 	|     |       |     |
-384	* - - * - - - * - - * 384
+  0	* - - * - - - * - - * 0
     0    128     384   512
+
+		0        H_W       H_W*2
+H_H*1.5 * - - - - * - - - - * H_H*1.5
+		|         |         |
+		|   UP    |  DOWN   |
+    H_H * - - - - * - - - - * H_H
+		|     |       |     |
+		| LFT | FRONT | RGT |
+		|     |       |     |
+      0 * - - * - - - * - - * 0
+		0   H_W/2  H_W*1.5  H_W*2
 */
 
 
@@ -231,25 +242,27 @@ float* precomputeHemicubeFormFactors() {
 	Calc_HemicubeFormFactors();
 
 	// zkopiruje pohledy do jedineho pole
-	for (unsigned int i=0; i < TEX_W*TEX_H; i++) {
-		unsigned int x = i % TEX_W;
-		unsigned int y = i / TEX_W;
+	for (unsigned int i=0; i < PATCHVIEW_TEX_RES; i++) {
+		unsigned int x = i % PATCHVIEW_TEX_W;
+		unsigned int y = i / PATCHVIEW_TEX_W;
 
 		// pohled dopredu
-		if (x >= 128 && x < 384 && y < 256)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor[ y * 256 + (x - 128) ];		
+		if (x >= HEMICUBE_W/2 && x < HEMICUBE_W*1.5 && y < HEMICUBE_H)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor[ y * HEMICUBE_W + (x - HEMICUBE_W/2) ];		
 		// pohled vlevo
-		else if (x < 128 && y < 256)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (128 - x) * 256 - y ];		
+		else if (x < HEMICUBE_W/2 && y < HEMICUBE_H)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (HEMICUBE_H/2 - x) * HEMICUBE_W - y ];		
 		// pohled vpravo
-		else if (x >= 384 && y < 256)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (x - 384) * 256 + y ];		
+		else if (x >= HEMICUBE_W*1.5 && y < HEMICUBE_H)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (x - unsigned int(HEMICUBE_W*1.5)) * HEMICUBE_W + y ];		
 		// pohled nahoru
-		else if (x < 256 && y >= 256)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (y - 256) * 256 + x ];
+		else if (x < HEMICUBE_W && y >= HEMICUBE_H)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (y - HEMICUBE_H) * HEMICUBE_W + x ];
 		// pohled dolu
-		else if (x >= 256 && y >= 256)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (127 - (y - 256)) * 256 + (x - 256) ];
+		else if (x >= HEMICUBE_W && y >= HEMICUBE_H)
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (HEMICUBE_H/2 - (y - HEMICUBE_H)) * HEMICUBE_W + (x - HEMICUBE_W) ];
+			// pokud by vyse uvedene delalo neplechu v release
+			//p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ ((HEMICUBE_H/2-1) - (y - HEMICUBE_H)) * HEMICUBE_W + (x - HEMICUBE_W) ];
 	}
 
 	/*
@@ -260,7 +273,7 @@ float* precomputeHemicubeFormFactors() {
 
 	
 	float total = 0.0f;
-	for (unsigned int i=0; i < TEX_W*TEX_H; i++) {
+	for (unsigned int i=0; i < PATCHVIEW_TEX_RES; i++) {
 		total += p_hemicube_formfactors[i];
 	}
 	cout << "total factors " << total << endl;

@@ -26,6 +26,17 @@ using namespace std;
 // parametr pro subdivision
 #define MAX_PATCH_AREA 0.1
 
+const unsigned int OCL_WORKITEMS_X = 4;
+const unsigned int OCL_WORKITEMS_Y = PATCHVIEW_TEX_H;
+const unsigned int OCL_SPANLENGTH = PATCHVIEW_TEX_W / OCL_WORKITEMS_X;
+
+// rozmery hemicube, resp. pohledove textury jsou v FormFactors.h
+// const unsigned int HEMICUBE_W = 256
+// const unsigned int HEMICUBE_H = 256
+// const unsigned int PATCHVIEW_TEX_W = HEMICUBE_W*2
+// const unsigned int PATCHVIEW_TEX_H = HEMICUBE_H*1.5
+// const unsigned int PATCHVIEW_TEX_RES = PATCHVIEW_TEX_W * PATCHVIEW_TEX_H 
+
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
 // jmeno okna
@@ -80,8 +91,7 @@ static uint32_t* ocl_data_patchids;
 static float* ocl_data_formfactors;
 
 // CL argumenty programu
-cl_mem ocl_arg_ids, ocl_arg_energies, ocl_arg_writeindex, ocl_arg_patchview, 
-	ocl_arg_ffactors, ocl_arg_width, ocl_arg_height, ocl_arg_span_length;
+cl_mem ocl_arg_ids, ocl_arg_energies, ocl_arg_writeindex, ocl_arg_patchview, ocl_arg_ffactors;
 
 
 // citlivosti / rychlosti pohybu
@@ -437,14 +447,14 @@ bool InitGLObjects() {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, 128*4, 128*3, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0); // TODO: ulozit rozmery jako konstantu				
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, PATCHVIEW_TEX_W, PATCHVIEW_TEX_H, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 
 
 	// vytvorit FBO pro kresleni pohledu z patchu do textury
 	fbo = new CGLFrameBufferObject(
-		128 * 4, 128 * 3,
+		PATCHVIEW_TEX_W, PATCHVIEW_TEX_H,
 		1, true,
 		0, 0,
 		true, false,
@@ -479,13 +489,11 @@ bool InitCLObjects() {
 	   return false;
 	}
 	// Device
-	cl_uint cnt;
-	error = clGetDeviceIDs(ocl_platform, CL_DEVICE_TYPE_GPU, 1, &ocl_device, &cnt);
+	error = clGetDeviceIDs(ocl_platform, CL_DEVICE_TYPE_GPU, 1, &ocl_device, NULL);
 	if (error != CL_SUCCESS) {
 	   cerr << "Error getting device ids: " << errorMessage(error) << endl;
 	   return false;
 	}
-	cout << "devices count: " << cnt << endl;
 	// Context
 	ocl_context = clCreateContext(0, 1, &ocl_device, NULL, NULL, &error);
 	if (error != CL_SUCCESS) {
@@ -500,35 +508,22 @@ bool InitCLObjects() {
 	}
 	
 
-	unsigned int texRes = 128*4*128*3;
-
-	ocl_data_patchids = new uint32_t[texRes];
-	ocl_data_formfactors = new float[texRes];
 	
 	// pole ID patchu a jejich energii (na shodnych indexech)
-	ocl_arg_ids = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, texRes*sizeof(uint32_t), ocl_data_patchids, &error);
-	ocl_arg_energies = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, texRes*sizeof(float), ocl_data_formfactors, &error);
-	
+	ocl_arg_ids = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY, PATCHVIEW_TEX_RES*sizeof(uint32_t), NULL, &error);
+	ocl_arg_energies = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY, PATCHVIEW_TEX_RES*sizeof(float), NULL, &error);
+
 	// index do ID patchu a energii, sdileny mezi instacemi, atomicky posouvany
-	unsigned int firstIndex = 0;
-	ocl_arg_writeindex = clCreateBuffer(ocl_context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int), &firstIndex, &error);
+	ocl_arg_writeindex = clCreateBuffer(ocl_context, CL_MEM_READ_WRITE, sizeof(unsigned int), NULL, &error);
 
 	// data textury pohledu z nejakeho patche
-	ocl_arg_patchview = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, texRes*sizeof(unsigned int), NULL, &error);
+	ocl_arg_patchview = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES*sizeof(unsigned int), NULL, &error);
 
 	// data 'textury' form factoru
-	ocl_arg_ffactors = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, texRes*sizeof(float), NULL, &error);
-
-	// rozmery textur
-	ocl_arg_width = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, sizeof(unsigned int), NULL, &error);
-	ocl_arg_height = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, sizeof(unsigned int), NULL, &error);
-
-	// delka jedne scanline (delka linky, kterou bude zpracovavat jedna instance programu)	
-	ocl_arg_span_length = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, sizeof(unsigned int), NULL, &error);
+	ocl_arg_ffactors = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES*sizeof(float), NULL, &error);
 
 
-
-
+	// nacist zdrojovy kod kernelu
 	FILE* fp = fopen("ProcessHemicube.cl", "rb");
 	if (fp == NULL) {
 		cerr << "error: can't open OpenCL source file" << endl;
@@ -569,14 +564,9 @@ bool InitCLObjects() {
 	   return false;
 	}
 
-
-	// zarizeni, pro ktera se bude program kompilovat
-	const cl_device_id device_list[] = { ocl_device };
 	
-
 	// zkompilovat program
-	//error = clBuildProgram(ocl_program, 1, device_list, options.c_str(), NULL, NULL);
-	error = clBuildProgram(ocl_program, 1, device_list, "", NULL, NULL);
+	error = clBuildProgram(ocl_program, 1, &ocl_device, "", NULL, NULL);
 	if (error != CL_SUCCESS) {
 		cerr << "error: can't compile OpenCL program - ";
 		switch (error) {
@@ -614,12 +604,12 @@ bool InitCLObjects() {
 		char* build_log;
 		size_t log_size;
 
-		// First call to know the proper size
-		clGetProgramBuildInfo(ocl_program, device_list[0], CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+		// poprve pouze zjistime velikost logu
+		clGetProgramBuildInfo(ocl_program, ocl_device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
 		build_log = new char[log_size+1];
 	
-		// Second call to get the log
-		clGetProgramBuildInfo(ocl_program, device_list[0], CL_PROGRAM_BUILD_LOG, log_size, build_log, NULL);
+		// podruhe nacteme samotny vypis
+		clGetProgramBuildInfo(ocl_program, ocl_device, CL_PROGRAM_BUILD_LOG, log_size, build_log, NULL);
 		build_log[log_size] = '\0';
 		cout << build_log << endl;
 		delete[] build_log;
@@ -636,9 +626,8 @@ bool InitCLObjects() {
 	   return false;
 	}
 		
-	unsigned int texW = 128*4;
-	unsigned int texH = 128*3;
-	unsigned int spanLength = texW;
+	
+	unsigned int spanLength = PATCHVIEW_TEX_W;
 
 	// nastavit argumenty kernelu	
 	error  = clSetKernelArg (ocl_kernel, 0, sizeof(cl_mem), &ocl_arg_ids);
@@ -646,8 +635,8 @@ bool InitCLObjects() {
 	error |= clSetKernelArg (ocl_kernel, 2, sizeof(cl_mem), &ocl_arg_writeindex);
 	error |= clSetKernelArg (ocl_kernel, 3, sizeof(cl_mem), &ocl_arg_patchview);
 	error |= clSetKernelArg (ocl_kernel, 4, sizeof(cl_mem), &ocl_arg_ffactors);
-	error |= clSetKernelArg (ocl_kernel, 5, sizeof(unsigned int), &texW);
-	error |= clSetKernelArg (ocl_kernel, 6, sizeof(unsigned int), &texH);
+	error |= clSetKernelArg (ocl_kernel, 5, sizeof(unsigned int), &PATCHVIEW_TEX_W);
+	error |= clSetKernelArg (ocl_kernel, 6, sizeof(unsigned int), &PATCHVIEW_TEX_H);
 	error |= clSetKernelArg (ocl_kernel, 7, sizeof(unsigned int), &spanLength);
 	if (error != CL_SUCCESS) {
 		cerr << "error: can't set up ProcessHemicube kernel arguments" << endl;
@@ -655,7 +644,7 @@ bool InitCLObjects() {
 	}
 
 	// naplnit buffer argumentu - pole s formfactory - konstantni po celou dobu
-	error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_ffactors, CL_TRUE, 0, texRes*sizeof(float), p_formfactors,
+	error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_ffactors, CL_TRUE, 0, PATCHVIEW_TEX_RES*sizeof(float), p_formfactors,
  					0, NULL, NULL);
 	if (error != CL_SUCCESS) {
 		cerr << "error: can't write to ocl_arg_ffactors buffer" << endl;
@@ -685,9 +674,8 @@ void CleanupGLObjects()
 	// smaze textury
 
 	delete fbo;
-	// smaze pokusny buffer
+	// smaze render buffer
 }
-
 
 /**
  *  @brief uvolni vsechny OpenCL objekty
@@ -701,32 +689,12 @@ void CleanupCLObjects() {
 	clReleaseMemObject(ocl_arg_writeindex);
 	clReleaseMemObject(ocl_arg_patchview);
 	clReleaseMemObject(ocl_arg_ffactors);
-	clReleaseMemObject(ocl_arg_width);
-	clReleaseMemObject(ocl_arg_height);
-	clReleaseMemObject(ocl_arg_span_length);	
 }
 
 /**
  *	@brief vykresli uzivatelsky pohled do sceny (skutecne barvy patchu)
  */
-void DrawScene() {	
-	/*
-	int* indices = scene.getIndices();
-	float* vertices = scene.getVertices();
-	
-	// vykresli vse barevne (s moznym opakovanim barev)		
-	unsigned int* colors = Colors::getUniqueColors();
-	
-	for (unsigned int i = 0; i < patchIntervals.size(); i++) {			
-		glBindVertexArray(n_color_array_object[i]);					
-		//glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, colors[i]);
-		int count = 6 * (patchIntervals[i].to - patchIntervals[i].from);	
-		glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO(0));
-	}
-
-	delete[] colors;
-	*/
-
+void DrawScene() {		
 	glBindVertexArray(n_vertex_array_object);
 	//glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, 1024);
 	glDrawElements(GL_TRIANGLES, scene.getIndicesCount(), GL_UNSIGNED_INT, p_OffsetInVBO(0));
@@ -776,7 +744,6 @@ void DrawPatchLook(unsigned int interval) {
 	//proti chybe v ovladacich nvidia kde se VAO poskodi pri volani nekterych wgl funkci)		
 	glBindVertexArray(0); 		
 }
-
 
 /**
  * Vykresli nahledovy kriz s pohledem 'patchove' kamery
@@ -1223,7 +1190,7 @@ void OnIdle(CGL30Driver &driver)
 	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
 
 	glViewport(0, 0, fbo->n_Width(), fbo->n_Height());
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // VYCISTI SPECIFIKOVANY OBDE
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // vycisti buffery
 
 	Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,
 		Camera::PATCH_LOOK_LEFT, Camera::PATCH_LOOK_RIGHT, Camera::PATCH_LOOK_FRONT};
@@ -1265,7 +1232,7 @@ void OnIdle(CGL30Driver &driver)
 		{
 			// matice perspektivni projekce
 			Matrix4f t_projection;
-			CGLTransform::Perspective(t_projection, 90, 1.0F, .01f, 1000);		 // RATIO JE 1.0!!!
+			CGLTransform::Perspective(t_projection, 90, 1.0f, 0.01f, 1000);		 // RATIO JE 1.0!!!
 		
 			// modelview
 			Matrix4f t_modelview;
@@ -1303,21 +1270,14 @@ void OnIdle(CGL30Driver &driver)
 	// zpracovat vyrenderovanou texturu?
 	if (computeRadiosity) {	
 		
-		unsigned int texW = 128*4;
-		unsigned int texH = 128*3;
-		unsigned int texRes = texW * texH;
-		unsigned int spanLength = texW;
+		cl_int error = 0;		
 		
-		// ziskat data z textury
-		unsigned int* data = new unsigned int[texRes]; // alokovat predem
+		// ziskat data z textury a zkopirovat je do OCL bufferu
+		unsigned int* data = new unsigned int[PATCHVIEW_TEX_RES]; // alokovat predem		
 		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); 
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
-		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu, data uz jsou zkopirovana
-		
-		cl_int error = 0;
-
-		// naplnit buffer kernelu texturou pohledu
-		error  = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, texRes*sizeof(uint32_t), data, 0, NULL, NULL);
+		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu, data uz jsou zkopirovana do pameti
+		error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, PATCHVIEW_TEX_RES*sizeof(uint32_t), data, 0, NULL, NULL);
 		delete[] data;	// uz jsou v bufferu
 		
 
@@ -1327,15 +1287,12 @@ void OnIdle(CGL30Driver &driver)
 			error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &writeindex,	0, NULL, NULL);
 		}
 		_ASSERT(error == CL_SUCCESS);		
-
+		
 		// pocet instanci programu		
-		const unsigned int global_work_size[] = { 4, 128*3 };
+		const unsigned int global_work_size[] = { OCL_WORKITEMS_X, OCL_WORKITEMS_Y };
 		
 		// spustit program!
-		error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL,
-			global_work_size, 
-			NULL, 
-			0, NULL, NULL);		
+		error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL, global_work_size, NULL, 0, NULL, NULL);		
 		_ASSERT(error == CL_SUCCESS);
 
 		
@@ -1354,11 +1311,10 @@ void OnIdle(CGL30Driver &driver)
 		_ASSERT(error == CL_SUCCESS);
 
 
-		// mapovat buffer do pameti; pri problemech pouzit pomalejsi zpusob
+		// nabindovat buffer s barvami patchu
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 		
 		Patch* emitter = scenePatches[patchId]; // patch ze ktereho se koukalo
-
 		
 		// prenest energie
 		for (unsigned int i = 0; i < n_last_index; i++) {			
@@ -1391,11 +1347,10 @@ void OnIdle(CGL30Driver &driver)
 			newColor
 		};
 
-		glBufferSubData(GL_ARRAY_BUFFER, patchId * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-		
+		glBufferSubData(GL_ARRAY_BUFFER, patchId * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData); // aktualizovat data		
 		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		
-		
+
 		// nabindovat VBO s radiativnimi energiemi a updatovat jej
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
 		uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
