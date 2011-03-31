@@ -1195,14 +1195,14 @@ void OnIdle(CGL30Driver &driver)
 	Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,
 		Camera::PATCH_LOOK_LEFT, Camera::PATCH_LOOK_RIGHT, Camera::PATCH_LOOK_FRONT};
 
-	// 'okna' do kterych se budou kreslit jednotlive pohledy
-	// x, y, w, h
+	// 'okna' do kterych se budou kreslit jednotlive pohledy; odpovida 'nakresu' v FormFactors.cpp
+	// x, y, w, h		(0,0 = levy dolni roh)
 	int p_viewport_list[][4] = {
-		{0, 256, 256, 256},
-		{256, 128, 256, 256},
-		{-128, 0, 256, 256},
-		{384, 0, 256, 256},
-		{128, 0, 256, 256}
+		{	0,						HEMICUBE_H,		HEMICUBE_W,	HEMICUBE_H	},
+		{	HEMICUBE_W,				HEMICUBE_H/2,	HEMICUBE_W,	HEMICUBE_H	},
+		{	-1*int(HEMICUBE_W/2),	0,				HEMICUBE_W,	HEMICUBE_H	},
+		{	int(HEMICUBE_W*1.5),	0,				HEMICUBE_W,	HEMICUBE_H	},
+		{	HEMICUBE_W/2,			0,				HEMICUBE_W, HEMICUBE_H	}
 	};
 
 	// oblasti v texture, do kterych je povoleno kreslit;
@@ -1211,11 +1211,11 @@ void OnIdle(CGL30Driver &driver)
 	// 
 	// x, y, w, h
 	int p_scissors_list[][4] = {
-		{0, 256, 256, 128},
-		{256, 256, 256, 128},
-		{0, 0, 128, 256},
-		{384, 0, 128, 256},
-		{128, 0, 256, 256}
+		{	0,						HEMICUBE_H,		HEMICUBE_W,		HEMICUBE_H/2	},
+		{	HEMICUBE_W,				HEMICUBE_H,		HEMICUBE_W,		HEMICUBE_H/2	},
+		{	0,						0,				HEMICUBE_W/2,	HEMICUBE_H		},
+		{	int(HEMICUBE_W*1.5),	0,				HEMICUBE_W/2,	HEMICUBE_H		},
+		{	HEMICUBE_W/2,			0,				HEMICUBE_W,		HEMICUBE_H		}
 	};
 
 	// najit patch s nejvetsi energii
@@ -1275,8 +1275,9 @@ void OnIdle(CGL30Driver &driver)
 		// ziskat data z textury a zkopirovat je do OCL bufferu
 		unsigned int* data = new unsigned int[PATCHVIEW_TEX_RES]; // alokovat predem		
 		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); 
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);		
 		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu, data uz jsou zkopirovana do pameti
+		//memset(data, 0, PATCHVIEW_TEX_RES*sizeof(unsigned int));
 		error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, PATCHVIEW_TEX_RES*sizeof(uint32_t), data, 0, NULL, NULL);
 		delete[] data;	// uz jsou v bufferu
 		

@@ -260,9 +260,7 @@ float* precomputeHemicubeFormFactors() {
 			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (y - HEMICUBE_H) * HEMICUBE_W + x ];
 		// pohled dolu
 		else if (x >= HEMICUBE_W && y >= HEMICUBE_H)
-			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ (HEMICUBE_H/2 - (y - HEMICUBE_H)) * HEMICUBE_W + (x - HEMICUBE_W) ];
-			// pokud by vyse uvedene delalo neplechu v release
-			//p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ ((HEMICUBE_H/2-1) - (y - HEMICUBE_H)) * HEMICUBE_W + (x - HEMICUBE_W) ];
+			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ ((HEMICUBE_H/2-1) - (y - HEMICUBE_H)) * HEMICUBE_W + (x - HEMICUBE_W) ];
 	}
 
 	/*
