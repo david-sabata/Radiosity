@@ -41,6 +41,7 @@ class Patch {
 		Vector3f getUp();		// vraci pomocny Up vector; slouzi jako referencni bod pri otaceni pohledu
 		Vector3f getColor();	// vraci vlastni barvu patche
 		float    getReflectivity();	// vraci odrazivost povrchu
+		Patch**  getNeighbours(); // vraci pole ukazatelu na sousedici patche
 
 		Vector3f radiosity;	// radiozita - energie vyzarena z povrchu
 		Vector3f illumination;	// osvetlenost plosky (zde se scitaji svetla ktera dopadla na plosku)
@@ -50,5 +51,6 @@ class Patch {
 		Vector3f color;		// vychozi barva povrchu - pouzita pro color bleeding
 		//float reflectivity;	// odrazivost plosky - pro vypocet kolik energie se pohlti/odrazi
 		
+		Patch* neighbours[8]; // pole ukazatelu na sousedici patche (pouziva se pro interpolaci barev)
 };
 

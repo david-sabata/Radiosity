@@ -35,15 +35,15 @@ void ModelContainer::load() {
 
 	if (1) {
 		Model* room = new PrimitiveModel( PrimitiveModel::ROOM );
-		Model* cube = new PrimitiveModel( PrimitiveModel::CUBE );
-		Model* block = new PrimitiveModel( PrimitiveModel::BLOCK );
+		//Model* cube = new PrimitiveModel( PrimitiveModel::CUBE );
+		//Model* block = new PrimitiveModel( PrimitiveModel::BLOCK );
 
-		Model* roomClosure = new PrimitiveModel( PrimitiveModel::ROOMCLOSURE );
+		//Model* roomClosure = new PrimitiveModel( PrimitiveModel::ROOMCLOSURE );
 
 		addModel(room);
-		addModel(roomClosure);
-		addModel(cube);
-		addModel(block);
+		//addModel(roomClosure);
+		//addModel(cube);
+		//addModel(block);
 	}
 
 	if (0) {

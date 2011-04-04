@@ -20,7 +20,7 @@
 using namespace std;
 
 // parametr pro subdivision
-#define MAX_PATCH_AREA 0.1
+#define MAX_PATCH_AREA 3
 
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
