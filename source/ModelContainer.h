@@ -1,10 +1,12 @@
-#pragma once
 
 #include <vector>
+#include <stdint.h>
 #include "PrimitiveModel.h"
 #include "WaveFrontModel.h"
 #include "Vector.h"
+#include "Timer.h"
 
+using namespace std;
 
 // TODO:	rozsirit tridu na Scene s moznosti nacitani a funkce pro sireni radiozity
 //			a tim uplne zapouzdrit praci s modely/patchi ?  Nebo alespon pridat moznost

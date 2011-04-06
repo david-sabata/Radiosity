@@ -70,11 +70,12 @@ vector<Patch*>* Patch::divide(double area) {
 	// obsah patche
 	double S = 0.5f * u1.f_Length() * u2.f_Length() * sin(phi);
 	//cout << "S: " << S << endl;
-
-	if (S <= area)
+	
+	// tolerance 0.1% - pri deleni muzou vznikat miniaturni chyby, ktere by zbytecne 
+	if (S <= (area * 1.01) )
 		return NULL;	
 
-	/*
+	/* puvodni deleni na ctvrtiny - nutne volat rekurzivne
 	// spocitat nove ctvrtinove patche
 	Vector3f AB = (A + B) / 2;
 	Vector3f BC = (B + C) / 2;
@@ -92,73 +93,64 @@ vector<Patch*>* Patch::divide(double area) {
 	//cout << "====================" << endl;
 	*/
 
-	double w = (B - A).f_Length(); // sirka puvodniho patche
-	double h = (C - B).f_Length(); // vyska puvodniho patche
-
-	double a = sqrt(area); // idealni delka strany rozdeleneho patche (za predpokladu ze je ctvercovy)
-
-	unsigned int kx = unsigned int( floor(w / a) ); // pocet dilku na ktere se bude delit v sirce
-	unsigned int ky = unsigned int( floor(h / a) ); // pocet dilku na ktere se bude delit v delce
+	double a = sqrt(area); // idealni delka strany rozdeleneho patche (za predpokladu ze je ctvercovy)	
 	
-	double px = (w / kx) / w; // pomerna cast noveho dilku k sirce puvodniho
-	double py = (h / ky) / h; // pomerna cast noveho dilku k delce puvodniho
+	// predpokladame, ze patch bude vicemene ctvercovy (prip. obdelnikovy), tedy ze se 
+	// vzdy dve a dve strany budou delit stejnym poctem
+	unsigned int kx = unsigned int( ceil((B - A).f_Length() / a) ); // pocet dilku na ktere se bude delit v sirce
+	unsigned int ky = unsigned int( ceil((C - B).f_Length() / a) ); // pocet dilku na ktere se bude delit v delce
 
-	//Vector3f dx( (B - A) * float(px) ); // sirka noveho dilku
-	//Vector3f dy( (D - A) * py ); // delka noveho dilku
+	// pomerne casti hran puvodniho patche
+	Vector3f pCD = (C - D) / kx; 
+	Vector3f pAB = (B - A) / kx; 
 
-
+	//cout << "kx: " << kx << "\t\tky:" << ky << endl;
 
 	vector<Patch*>* patches = new vector<Patch*>;
 
 	// [0, 0] je vlevo dole (odpovida bodu A)
 	for (unsigned int col = 0; col < kx; col++) {
-		for (unsigned int row = 0; row < ky; row++) {
+		for (unsigned int row = 0; row < ky; row++) {			
 
-			/*
-			// souradnice rohu, relativne k A
-			Vector3f x0; // X-ova souradnice leve strany patche
-			Vector3f x1; // X-ova souradnice prave strany patche
-			Vector3f y0; // Y-ova souradnice dolni strany patche
-			Vector3f y1; // Y-ova souradnice horni strany patche
+			Vector3f bCD = pCD * col + D; // pozice rezu na horni strane
+			Vector3f bAB = pAB * col + A; // pozice rezu na dolni strane
+			Vector3f nA = bAB + (( bCD - bAB ) / ky) * row;
+
+			Vector3f bCD1 = pCD * (col + 1) + D; // pozice rezu na horni strane
+			Vector3f bAB1 = pAB * (col + 1) + A; // pozice rezu na dolni strane
+			Vector3f nB = bAB1 + (( bCD1 - bAB1 ) / ky) * row;
+
+			Vector3f bCD2 = pCD * (col + 1) + D; // pozice rezu na horni strane
+			Vector3f bAB2 = pAB * (col + 1) + A; // pozice rezu na dolni strane
+			Vector3f nC = bAB2 + (( bCD2 - bAB2 ) / ky) * (row + 1);
+
+			Vector3f bCD3 = pCD * col + D; // pozice rezu na horni strane
+			Vector3f bAB3 = pAB * col + A; // pozice rezu na dolni strane
+			Vector3f nD = bAB3 + (( bCD3 - bAB3 ) / ky) * (row + 1);
+
 			
-			// vypocist nove souradnice rohu
-			if (col + 1 < kx) {
-				x0 = Vector3f( dx * col );
-				x1 = Vector3f( dx * (col + 1) );
-			} else {
-				x0 = Vector3f( dx * col );
-				x1 = Vector3f( B - A );
-			}
-
-			if (row + 1 < ky) {
-				y0 = Vector3f( dy * row );
-				y1 = Vector3f( dy * (row + 1) );
-			} else {
-				y0 = Vector3f( dy * row );
-				y1 = Vector3f( D - A );
-			}
+			/*
+			cout << "col " << col << "\t\trow" << row << endl;
+			cout << "A\t\t" << A.x << "\t" << A.y << "\t" << A.z << endl;
+			cout << "B\t\t" << B.x << "\t" << B.y << "\t" << B.z << endl;
+			cout << "C\t\t" << C.x << "\t" << C.y << "\t" << C.z << endl;
+			cout << "D\t\t" << D.x << "\t" << D.y << "\t" << D.z << endl;
+			cout << "B-A\t\t" << (B-A).x << "\t" << (B-A).y << "\t" << (B-A).z << endl;
+			cout << "(B-A)/kx\t" << ((B-A)/kx).x << "\t" << ((B-A)/kx).y << "\t" << ((B-A)/kx).z << endl;
+			cout << "((B-A)/kx)*col\t" << (((B-A)/kx)*col).x << "\t" << (((B-A)/kx)*col).y << "\t" << (((B-A)/kx)*col).z << endl;
+			cout << "C-D\t\t" << (C-D).x << "\t" << (C-D).y << "\t" << (C-D).z << endl;
+			cout << "(C-D)/kx\t" << ((C-D)/kx).x << "\t" << ((C-D)/kx).y << "\t" << ((C-D)/kx).z << endl;
+			cout << "((C-D)/kx)*col\t" << (((C-D)/kx)*col).x << "\t" << (((C-D)/kx)*col).y << "\t" << (((C-D)/kx)*col).z << endl;
+			cout << "nA\t\t" << nA.x << "\t" << nA.y << "\t" << nA.z << endl;						
+			cout << endl;
 			*/
-
-			Vector3f baseAB0 = Vector3f( (B - A) * px * col );
-			Vector3f baseAB1 = Vector3f( (B - A) * px * (col + 1) );
-
-			Vector3f baseBC0 = Vector3f( (C - B) * px * row );
-			Vector3f baseBC1 = Vector3f( (C - B) * px * (row + 1) );
-
-			Vector3f baseCD0 = Vector3f( (D - C) * px * col );
-			Vector3f baseCD1 = Vector3f( (D - C) * px * (col + 1) );
-
-			Vector3f baseAD0 = Vector3f( (D - A) * px * row );
-			Vector3f baseAD1 = Vector3f( (D - A) * px * (row + 1) );
-
-
-			Patch* p = new Patch( 
-							/*(A + x0 + y0), (A + x1 + y0), (A + x1 + y1), (A + x0 + y1), */
-							(A + baseAB0 + baseAD0), (A + baseAB1 + baseBC0), (A + baseCD1 + baseBC1), (A + baseCD0 + baseAD1), 
+			
+			Patch* p = new Patch( 							
+							nA, nB, nC, nD,						
 							this->color, this->illumination, this->radiosity 
 						);
 
-			patches->push_back(p);
+			patches->push_back(p);		
 		}
 	}
 

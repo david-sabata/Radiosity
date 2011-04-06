@@ -35,21 +35,21 @@ void ModelContainer::load() {
 
 	if (1) {
 		Model* room = new PrimitiveModel( PrimitiveModel::ROOM );
-		//Model* cube = new PrimitiveModel( PrimitiveModel::CUBE );
-		//Model* block = new PrimitiveModel( PrimitiveModel::BLOCK );
+		Model* cube = new PrimitiveModel( PrimitiveModel::CUBE );
+		Model* block = new PrimitiveModel( PrimitiveModel::BLOCK );
 
-		//Model* roomClosure = new PrimitiveModel( PrimitiveModel::ROOMCLOSURE );
+		Model* roomClosure = new PrimitiveModel( PrimitiveModel::ROOMCLOSURE );
 
 		addModel(room);
-		//addModel(roomClosure);
-		//addModel(cube);
-		//addModel(block);
+		addModel(roomClosure);
+		addModel(cube);
+		addModel(block);
 	}
 
 	if (0) {
 		//Model* test = new WaveFrontModel("../models/simple_box.obj");
-		Model* test = new WaveFrontModel("../models/chair.obj");
-		//Model* test = new WaveFrontModel("../models/fleurOptonl.obj");
+		//Model* test = new WaveFrontModel("../models/chair.obj");
+		Model* test = new WaveFrontModel("../models/fleurOptonl.obj");
 		addModel(test);
 	}
 }
@@ -79,6 +79,9 @@ void ModelContainer::removeModel(int i) {
  */
 void ModelContainer::updateData() {
 	
+	CTimer timer;
+	timer.ResetTimer();
+
 	// seskladat data z jednotlivych modelu do jedineho (pomocneho) vektoru
 	vector<float>* tmpVertices = new vector<float>();
 	vector<int>* tmpIndices = new vector<int>();
@@ -91,9 +94,14 @@ void ModelContainer::updateData() {
 
 	int offset = 0; // pocet jiz vlozenych floatu - pro spravne provazani indexu a vrcholu
 
+	cout << "po initu " << timer.f_Time() << endl;
+
 	for (vector<Model*>::iterator it = models.begin(); it != models.end(); it++) {
 		
+		float x = timer.f_Time();
 		vector<Patch*>* patches = (*it)->getPatches( maxPatchArea );
+		cout << "get patches " << (timer.f_Time() - x) << endl;
+
 		int ptchCnt = patches->size();
 		patchesCount += ptchCnt;
 		verticesCount += ptchCnt * 4 * 3; // ctvercove plosky = 4 vrcholy * 3 souradnice		
@@ -122,6 +130,7 @@ void ModelContainer::updateData() {
 		}		
 	}
 		
+	cout << "po naplneni " << timer.f_Time() << endl;
 
 	// obnovit pole vrcholu, indexu a patchu
 	if (vertices != NULL)
@@ -141,6 +150,8 @@ void ModelContainer::updateData() {
 	copy(tmpIndices->begin(), tmpIndices->end(), indices);
 	copy(tmpPatches->begin(), tmpPatches->end(), patches);
 
+	cout << "po kopirovani " << timer.f_Time() << endl;
+
 	//printf("scene vertices: %i\n scene indices: %i\n", verticesCount/3, indicesCount);
 	printf("scene patches: %i\n", patchesCount);
 	
@@ -149,6 +160,8 @@ void ModelContainer::updateData() {
 	delete tmpPatches;
 
 	needRefresh = false;
+
+	cout << "hotovo " << timer.f_Time() << endl;
 }
 
 
