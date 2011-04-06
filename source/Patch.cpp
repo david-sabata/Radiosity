@@ -1,5 +1,7 @@
 #include "Patch.h"
 
+Patch::Patch() {}
+
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4)
 		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
 			color(Vector3f(0.0f, 0.0f, 0.0f)), radiosity(Vector3f(0.0f, 0.0f, 0.0f)), illumination(Vector3f(0.0f, 0.0f, 0.0f))  {}

@@ -9,6 +9,7 @@ ModelContainer::ModelContainer(void) {
 	indicesCount = 0;
 	
 	patches = NULL;
+	patchesCount = 0;
 
 	maxPatchArea = 0; // defaultne bez deleni
 
