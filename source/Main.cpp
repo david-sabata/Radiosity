@@ -1324,6 +1324,9 @@ void LoadFromFile() {
 				// uvolnit GL objekty
 				CleanupGLObjects();
 
+				// zresetovat staticke objekty
+				patchIntervals.clear();
+
 				// vytvorit novou scenu
 				scene = ModelContainer::ModelContainer();
 				scene.maxPatchArea = MAX_PATCH_AREA;
