@@ -26,16 +26,36 @@ Model::~Model(void) {
  */
 void Model::subdivide(double area) {
 
+	// Brat nerozdelene patche a vysledky jejich deleni pripojovat na konec vektoru.
+	// Pokud se patch nerozdeli, proste se zkopiruje. Nakonec se zacatek pole (puvodni patche) odrizne
+	unsigned int n_original_size = patches->size();	
+
+	for (unsigned int i = 0; i < n_original_size; i++) {
+
+		Patch* p = patches->at(i);
+		vector<Patch*>* p_new_patches = p->divide(area);
+
+		if (p_new_patches == NULL) {
+			Patch* n = new Patch(*p);
+			patches->push_back(n);
+		} else {
+			patches->insert(patches->end(), p_new_patches->begin(), p_new_patches->end());
+		}
+
+	}
+
+	patches->erase(patches->begin(), patches->begin() + n_original_size);
+
+
+	/*
 	// prevest vektor na deque pro efektivnejsi praci s prvky
 	deque<Patch*>* deq = new deque<Patch*>();
 	deq->assign( patches->begin(), patches->end() ); 
 
 	// postupne brat prvky ze zacatku, delit je a vkladat na konec
 	int toBeChecked = deq->size();
-
-	//int failsafe = 1000;
-
-	while (toBeChecked > 0 /*&& --failsafe > 0*/) {
+	
+	while (toBeChecked > 0) {
 		Patch* p = deq->front();
 		deq->pop_front();
 
@@ -64,4 +84,5 @@ void Model::subdivide(double area) {
 	patches->reserve(deq->size());
 	patches->assign( deq->begin(), deq->end() );
 	delete deq;
+	*/
 }

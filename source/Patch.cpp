@@ -101,8 +101,8 @@ vector<Patch*>* Patch::divide(double area) {
 	unsigned int ky = unsigned int( ceil((C - B).f_Length() / a) ); // pocet dilku na ktere se bude delit v delce
 
 	// pomerne casti hran puvodniho patche
-	Vector3f pCD = (C - D) / kx; 
-	Vector3f pAB = (B - A) / kx; 
+	Vector3f pCD = (C - D) / float(kx); 
+	Vector3f pAB = (B - A) / float(kx); 
 
 	//cout << "kx: " << kx << "\t\tky:" << ky << endl;
 
@@ -112,21 +112,21 @@ vector<Patch*>* Patch::divide(double area) {
 	for (unsigned int col = 0; col < kx; col++) {
 		for (unsigned int row = 0; row < ky; row++) {			
 
-			Vector3f bCD = pCD * col + D; // pozice rezu na horni strane
-			Vector3f bAB = pAB * col + A; // pozice rezu na dolni strane
-			Vector3f nA = bAB + (( bCD - bAB ) / ky) * row;
+			Vector3f bCD = pCD * float(col) + D; // pozice rezu na horni strane
+			Vector3f bAB = pAB * float(col) + A; // pozice rezu na dolni strane
+			Vector3f nA = bAB + (( bCD - bAB ) / float(ky)) * float(row);
 
-			Vector3f bCD1 = pCD * (col + 1) + D; // pozice rezu na horni strane
-			Vector3f bAB1 = pAB * (col + 1) + A; // pozice rezu na dolni strane
-			Vector3f nB = bAB1 + (( bCD1 - bAB1 ) / ky) * row;
+			Vector3f bCD1 = pCD * float(col + 1) + D; // pozice rezu na horni strane
+			Vector3f bAB1 = pAB * float(col + 1) + A; // pozice rezu na dolni strane
+			Vector3f nB = bAB1 + (( bCD1 - bAB1 ) / float(ky)) * float(row);
 
-			Vector3f bCD2 = pCD * (col + 1) + D; // pozice rezu na horni strane
-			Vector3f bAB2 = pAB * (col + 1) + A; // pozice rezu na dolni strane
-			Vector3f nC = bAB2 + (( bCD2 - bAB2 ) / ky) * (row + 1);
+			Vector3f bCD2 = pCD * float(col + 1) + D; // pozice rezu na horni strane
+			Vector3f bAB2 = pAB * float(col + 1) + A; // pozice rezu na dolni strane
+			Vector3f nC = bAB2 + (( bCD2 - bAB2 ) / float(ky)) * float(row + 1);
 
-			Vector3f bCD3 = pCD * col + D; // pozice rezu na horni strane
-			Vector3f bAB3 = pAB * col + A; // pozice rezu na dolni strane
-			Vector3f nD = bAB3 + (( bCD3 - bAB3 ) / ky) * (row + 1);
+			Vector3f bCD3 = pCD * float(col) + D; // pozice rezu na horni strane
+			Vector3f bAB3 = pAB * float(col) + A; // pozice rezu na dolni strane
+			Vector3f nD = bAB3 + (( bCD3 - bAB3 ) / float(ky)) * float(row + 1);
 
 			
 			/*
