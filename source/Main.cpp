@@ -24,7 +24,7 @@
 using namespace std;
 
 // parametr pro subdivision
-#define MAX_PATCH_AREA 0.1
+#define MAX_PATCH_AREA 1
 
 const unsigned int OCL_WORKITEMS_X = 4;
 const unsigned int OCL_WORKITEMS_Y = PATCHVIEW_TEX_H;
@@ -50,6 +50,9 @@ static bool b_running = true;
 
 HWND h_wnd;
 // okno
+
+CGL30Driver driver;
+// OpenGL driver
 
 void OnIdle(CGL30Driver &driver);
 void onResize(int n_x, int n_y, int n_new_width, int n_new_height);
@@ -447,7 +450,7 @@ bool InitGLObjects() {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, PATCHVIEW_TEX_W, PATCHVIEW_TEX_H, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, PATCHVIEW_TEX_W, PATCHVIEW_TEX_H, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 
@@ -494,8 +497,12 @@ bool InitCLObjects() {
 	   cerr << "Error getting device ids: " << errorMessage(error) << endl;
 	   return false;
 	}
-	// Context
-	ocl_context = clCreateContext(0, 1, &ocl_device, NULL, NULL, &error);
+	// Context - vytvoreny z OpenGL contextu
+	cl_context_properties props[] = {
+		CL_GL_CONTEXT_KHR, (cl_context_properties)driver.GetContext(),
+		0
+	};
+	ocl_context = clCreateContext(props, 1, &ocl_device, NULL, NULL, &error);
 	if (error != CL_SUCCESS) {
 	   cerr << "Error creating context: " << errorMessage(error) << endl;
 	   return false;
@@ -517,11 +524,13 @@ bool InitCLObjects() {
 	ocl_arg_writeindex = clCreateBuffer(ocl_context, CL_MEM_READ_WRITE, sizeof(unsigned int), NULL, &error);
 
 	// data textury pohledu z nejakeho patche
-	ocl_arg_patchview = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES*sizeof(unsigned int), NULL, &error);
+	//ocl_arg_patchview = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES*sizeof(unsigned int), NULL, &error);
+	ocl_arg_patchview = clCreateFromGLTexture2D(ocl_context, CL_MEM_READ_ONLY, GL_TEXTURE_2D, 0, n_patchlook_texture, &error);
 
 	// data 'textury' form factoru
 	ocl_arg_ffactors = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES*sizeof(float), NULL, &error);
 
+	_ASSERT(error == CL_SUCCESS);
 
 	// nacist zdrojovy kod kernelu
 	FILE* fp = fopen("ProcessHemicube.cl", "rb");
@@ -811,7 +820,7 @@ int main(int n_arg_num, const char **p_arg_list)
 
 	// inicializuje OpenGL
 	bool b_forward_compatible = true; // jestli ma byt OpenGL kontext dopredne kompatibilni (tzn. nepodporovat funkce "stareho" OpenGL); pokud vase GPU nepodporuje OpenGL 3.0 nebo vyssi, pak vam to s timto nepobezi
-	CGL30Driver driver;
+	//CGL30Driver driver;
 	if(!driver.Init(h_wnd, b_forward_compatible, 3, 0, n_width, n_height, 32, 24, 0, false)) {
 		fprintf(stderr, "error: OpenGL initialization failed\n"); // nepodarilo se zinicializovat OpenGL
 		return -1;
@@ -1272,6 +1281,7 @@ void OnIdle(CGL30Driver &driver)
 		
 		cl_int error = 0;		
 		
+		/*
 		// ziskat data z textury a zkopirovat je do OCL bufferu
 		unsigned int* data = new unsigned int[PATCHVIEW_TEX_RES]; // alokovat predem		
 		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); 
@@ -1280,7 +1290,11 @@ void OnIdle(CGL30Driver &driver)
 		//memset(data, 0, PATCHVIEW_TEX_RES*sizeof(unsigned int));
 		error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, PATCHVIEW_TEX_RES*sizeof(uint32_t), data, 0, NULL, NULL);
 		delete[] data;	// uz jsou v bufferu
-		
+		*/
+
+		// ziskat pristup k OGL texture s pohledem z patche		
+		glFinish(); // nutne pro sync
+		error |= clEnqueueAcquireGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
 
 		// vynulovat index na ktery se zapisuje - nutne v kazde iteraci!
 		{
@@ -1309,6 +1323,11 @@ void OnIdle(CGL30Driver &driver)
 		// precist data
 		error  = clEnqueueReadBuffer (ocl_queue, ocl_arg_ids, CL_TRUE, 0, n_last_index*sizeof(uint32_t), p_pids, 0, NULL, NULL);
 		error |= clEnqueueReadBuffer (ocl_queue, ocl_arg_energies, CL_TRUE, 0, n_last_index*sizeof(float), p_energies, 0, NULL, NULL);		
+		_ASSERT(error == CL_SUCCESS);
+
+		// uvolnit OGL objekty z drzeni OCL
+		clFinish(ocl_queue); // nutne pro sync
+		error |= clEnqueueReleaseGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
 		_ASSERT(error == CL_SUCCESS);
 
 

@@ -7,7 +7,7 @@ __kernel void ProcessHemicube(
 		__global uint32_t *p_ids,				// patche, kterym nalezi energie, indexovano hodnotami p_write_index
 		__global float *p_energies,				// soucty energii, indexovano hodnotami p_write_index
 		__global unsigned int *p_write_index,	// index k zapisu do p_ids a p_energies, sdileny mezi instancemi, atomicky posouvany
-		__global const uint32_t *p_patchview,	// textura ve ktere je pohled z nejakeho patche
+		__global __read_only image2d_t *p_patchview,	// textura ve ktere je pohled z nejakeho patche
 		__global const float *p_ffactors,		// textura form factoru
 		const unsigned int n_width,				// sirka textury
 		const unsigned int n_height,			// vyska textury

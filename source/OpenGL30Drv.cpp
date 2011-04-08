@@ -204,6 +204,11 @@ void CGL30Driver::Blit() const
     SwapBuffers(m_h_dc);
 }
 
+HGLRC CGL30Driver::GetContext() 
+{
+	return m_h_glrc;
+}
+
 /*
  *								=== ~CGL30Driver ===
  */

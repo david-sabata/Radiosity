@@ -176,6 +176,11 @@ public:
 	 *	@note This doesn't explicitly handle case where OpenGL was not initialized.
 	 */
     void Blit() const;
+
+	/**
+	 *  @brief GL context getter
+	 */
+	HGLRC GetContext();
 };
 
 #endif //__GL30_DRIVER_INCLUDED
