@@ -634,6 +634,13 @@ bool InitCLObjects() {
 	   cerr << "error: can't extract ProcessHemicube kernel" << endl;
 	   return false;
 	}
+
+	cl_sampler ocl_sampler = clCreateSampler(ocl_context, CL_FALSE, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_NEAREST, &error);
+	if(!ocl_sampler || error) {
+		cerr << "error: unable to create OpenCL sampler" << endl;
+        return false;
+	}
+
 		
 	
 	unsigned int spanLength = PATCHVIEW_TEX_W;
@@ -643,10 +650,11 @@ bool InitCLObjects() {
 	error |= clSetKernelArg (ocl_kernel, 1, sizeof(cl_mem), &ocl_arg_energies);
 	error |= clSetKernelArg (ocl_kernel, 2, sizeof(cl_mem), &ocl_arg_writeindex);
 	error |= clSetKernelArg (ocl_kernel, 3, sizeof(cl_mem), &ocl_arg_patchview);
-	error |= clSetKernelArg (ocl_kernel, 4, sizeof(cl_mem), &ocl_arg_ffactors);
-	error |= clSetKernelArg (ocl_kernel, 5, sizeof(unsigned int), &PATCHVIEW_TEX_W);
-	error |= clSetKernelArg (ocl_kernel, 6, sizeof(unsigned int), &PATCHVIEW_TEX_H);
-	error |= clSetKernelArg (ocl_kernel, 7, sizeof(unsigned int), &spanLength);
+	error |= clSetKernelArg (ocl_kernel, 4, sizeof(cl_sampler), &ocl_sampler);
+	error |= clSetKernelArg (ocl_kernel, 5, sizeof(cl_mem), &ocl_arg_ffactors);
+	error |= clSetKernelArg (ocl_kernel, 6, sizeof(unsigned int), &PATCHVIEW_TEX_W);
+	error |= clSetKernelArg (ocl_kernel, 7, sizeof(unsigned int), &PATCHVIEW_TEX_H);
+	error |= clSetKernelArg (ocl_kernel, 8, sizeof(unsigned int), &spanLength);
 	if (error != CL_SUCCESS) {
 		cerr << "error: can't set up ProcessHemicube kernel arguments" << endl;
 		return false;
