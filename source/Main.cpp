@@ -20,7 +20,7 @@
 using namespace std;
 
 // parametr pro subdivision
-#define MAX_PATCH_AREA 3
+#define MAX_PATCH_AREA 1
 
 static const char *p_s_window_name = "Radiosity renderer";
 static const char *p_s_class_name = "my_wndclass";
@@ -39,6 +39,7 @@ HWND h_wnd;
 void OnIdle(CGL30Driver &driver);
 void onResize(int n_x, int n_y, int n_new_width, int n_new_height);
 LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_param);
+void smoothShadePatch(uint32_t* colors, Patch* p);
 // prototypy funkci
 
 static GLuint n_patchlook_texture;
@@ -487,7 +488,7 @@ void DrawScene() {
 
 	delete[] colors;
 	*/
-
+	//glBindVertexArray(n_color_array_object[0]);
 	glBindVertexArray(n_vertex_array_object);
 	//glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, 1024);
 	glDrawElements(GL_TRIANGLES, scene.getIndicesCount(), GL_UNSIGNED_INT, p_OffsetInVBO(0));
@@ -1118,13 +1119,10 @@ void OnIdle(CGL30Driver &driver)
 		if (emitter->illumination.z > 1.0)
 			emitter->illumination.z = 1.0;
 		
-		uint32_t newColor = Colors::packColor(emitter->illumination * emitter->getColor());
-		uint32_t newData[4] = {
-			newColor,
-			newColor,
-			newColor,
-			newColor
-		};
+		//uint32_t newColor = Colors::packColor(emitter->illumination * emitter->getColor());
+		// vypocitat nove barvy
+		uint32_t newData[4];
+		smoothShadePatch(newData, emitter);
 
 		glBufferSubData(GL_ARRAY_BUFFER, patchId * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 		
@@ -1178,6 +1176,8 @@ void OnIdle(CGL30Driver &driver)
 			cout << "pass " << passCounter << ", " << setprecision(10) << total << " energy left" << endl;
 
 		passCounter++;
+
+		computeRadiosity = false;
 	}
 
 
@@ -1249,4 +1249,94 @@ void OnIdle(CGL30Driver &driver)
 	ostringstream winTitle;
 	winTitle << p_s_window_name << ", FPS: " << f_fps;
 	SetWindowText(h_wnd, winTitle.str().c_str());
+}
+
+
+
+/**
+ * @brief Vypocita nove barvy vrcholu patche ze znalosti jeho sousedu
+ * @param[out] pole 4 barev (uint32_t) pro jednotlive rohy
+ * @param[in] patch se kterym se pracuje
+ */
+void smoothShadePatch(uint32_t* colors, Patch* p) {
+
+	unsigned int w;
+
+	// levy horni vrchol
+	Vector3f color_lt = p->getColor() * p->illumination;
+	w = 1;
+	if (p->neighbours[7] != NULL) {
+		color_lt += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;
+		w++;
+	}
+	if (p->neighbours[0] != NULL) {
+		color_lt += p->neighbours[0]->getColor() * p->neighbours[0]->illumination;
+		w++;
+	}
+	if (p->neighbours[1] != NULL) {
+		color_lt += p->neighbours[1]->getColor() * p->neighbours[1]->illumination;
+		w++;
+	}
+	color_lt = color_lt / w;
+	
+	// pravy horni vrchol
+	Vector3f color_rt = p->getColor() * p->illumination;
+	w = 1;
+	if (p->neighbours[1] != NULL) {
+		color_rt += p->neighbours[1]->getColor() * p->neighbours[1]->illumination;
+		w++;
+	}
+	if (p->neighbours[2] != NULL) {
+		color_rt += p->neighbours[2]->getColor() * p->neighbours[2]->illumination;
+		w++;
+	}
+	if (p->neighbours[3] != NULL) {
+		color_rt += p->neighbours[3]->getColor() * p->neighbours[3]->illumination;
+		w++;
+	}
+	color_rt = color_rt / w;
+
+	// pravy dolni vrchol
+	Vector3f color_rb = p->getColor() * p->illumination;
+	w = 1;
+	if (p->neighbours[3] != NULL) {
+		color_rb += p->neighbours[3]->getColor() * p->neighbours[3]->illumination;
+		w++;
+	}
+	if (p->neighbours[4] != NULL) {
+		color_rb += p->neighbours[4]->getColor() * p->neighbours[4]->illumination;
+		w++;
+	}
+	if (p->neighbours[5] != NULL) {
+		color_rb += p->neighbours[5]->getColor() * p->neighbours[5]->illumination;
+		w++;
+	}
+	color_rb = color_rb / w;
+
+	// levy dolni vrchol
+	Vector3f color_lb = p->getColor() * p->illumination;
+	w = 1;
+	if (p->neighbours[5] != NULL) {
+		color_lb += p->neighbours[5]->getColor() * p->neighbours[5]->illumination;
+		w++;
+	}
+	if (p->neighbours[6] != NULL) {
+		color_lb += p->neighbours[6]->getColor() * p->neighbours[6]->illumination;
+		w++;
+	}
+	if (p->neighbours[7] != NULL) {
+		color_lb += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;
+		w++;
+	}
+	color_lb = color_lb / w;
+	
+	
+	//colors[0] = Colors::packColor(p->getColor() * p->illumination);
+	//colors[1] = Colors::packColor(p->getColor() * p->illumination);
+	//colors[2] = Colors::packColor(p->getColor() * p->illumination);
+	//colors[3] = Colors::packColor(p->getColor() * p->illumination);
+	colors[0] = Colors::packColor(color_lb);
+	colors[1] = Colors::packColor(color_rb);	
+	colors[2] = Colors::packColor(color_rt);
+	colors[3] = Colors::packColor(color_lt);	
 }

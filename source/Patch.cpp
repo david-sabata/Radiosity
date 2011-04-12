@@ -3,19 +3,31 @@
 
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4)
 		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
-			color(Vector3f(0.0f, 0.0f, 0.0f)), radiosity(Vector3f(0.0f, 0.0f, 0.0f)), illumination(Vector3f(0.0f, 0.0f, 0.0f))  {}
+			color(Vector3f(0.0f, 0.0f, 0.0f)), radiosity(Vector3f(0.0f, 0.0f, 0.0f)), illumination(Vector3f(0.0f, 0.0f, 0.0f))  {
+	for (int i = 0; i < 8; i++)
+		neighbours[i] = NULL;
+}
 
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color)
 		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
-			color(color), radiosity(Vector3f(0.0f, 0.0f, 0.0f)), illumination(Vector3f(0.0f, 0.0f, 0.0f)) {}
+			color(color), radiosity(Vector3f(0.0f, 0.0f, 0.0f)), illumination(Vector3f(0.0f, 0.0f, 0.0f)) {
+	for (int i = 0; i < 8; i++)
+		neighbours[i] = NULL;
+}
 
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f illumination)
 		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
-			color(color), illumination(illumination), radiosity(Vector3f(0.0f, 0.0f, 0.0f)) {}
+			color(color), illumination(illumination), radiosity(Vector3f(0.0f, 0.0f, 0.0f)) {
+	for (int i = 0; i < 8; i++)
+		neighbours[i] = NULL;
+}
 
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f illumination, Vector3f radiosity)
 		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 
-			color(color), illumination(illumination), radiosity(radiosity) {}
+			color(color), illumination(illumination), radiosity(radiosity) {
+	for (int i = 0; i < 8; i++)
+		neighbours[i] = NULL;
+}
 
 
 Patch::~Patch(void) {
@@ -175,11 +187,11 @@ vector<Patch*>* Patch::divide(double area) {
 		else { p->neighbours[2] = patches->at( (row + 1) * kx + (col + 1) ); }
 
 		// 3 - pravy
-		if (col + 1 >= ky) { p->neighbours[3] = p; }
+		if (col + 1 >= kx) { p->neighbours[3] = p; }
 		else { p->neighbours[3] = patches->at( row * kx + (col + 1) ); }
 
 		// 4 - pravy dolni
-		if (row == 0 || col + 1 >= ky) { p->neighbours[4] = p; }
+		if (row == 0 || col + 1 >= kx) { p->neighbours[4] = p; }
 		else { p->neighbours[4] = patches->at( (row - 1) * kx + (col + 1) ); }
 
 		// 5 - dolni

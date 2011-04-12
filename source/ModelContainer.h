@@ -8,14 +8,6 @@
 
 using namespace std;
 
-// TODO:	rozsirit tridu na Scene s moznosti nacitani a funkce pro sireni radiozity
-//			a tim uplne zapouzdrit praci s modely/patchi ?  Nebo alespon pridat moznost
-//			nad nimi iterovat?
-
-// TODO:	duplicitni hodnoty v modelech a v kontejneru!
-
-// TODO:	rozsirit addModel o pozici nebo rovnou transformacni matici?
-
 class ModelContainer {
 	
 	public:
@@ -53,6 +45,5 @@ class ModelContainer {
 
 		int* indices;	// pole indexu souvisejicich vrcholu, dynamicky alokovane
 		unsigned int indicesCount;	// velikost pole indexu (pocet hodnot)
-
 };
 

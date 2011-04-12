@@ -21,7 +21,7 @@ ModelContainer::~ModelContainer(void) {
 	for ( std::vector<Model*>::iterator it = models.begin(); it < models.end(); it++ )
 		delete (*it);
 
-	// vyprazdnit pole vrcholu a indexu
+	// uklidit
 	delete [] vertices;
 	delete [] indices;
 	delete [] patches;
@@ -49,7 +49,7 @@ void ModelContainer::load() {
 	if (0) {
 		//Model* test = new WaveFrontModel("../models/simple_box.obj");
 		//Model* test = new WaveFrontModel("../models/chair.obj");
-		Model* test = new WaveFrontModel("../models/fleurOptonl.obj");
+		Model* test = new WaveFrontModel("../models/VUT_final.obj");
 		addModel(test);
 	}
 }
