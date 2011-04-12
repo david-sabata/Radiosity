@@ -149,9 +149,50 @@ vector<Patch*>* Patch::divide(double area) {
 							nA, nB, nC, nD,						
 							this->color, this->illumination, this->radiosity 
 						);
-
+			
 			patches->push_back(p);		
 		}
+	}
+
+
+	// dopocitat patchum sousedy
+	for (unsigned int i = 0; i < patches->size(); i++) {
+		Patch* p = patches->at(i);
+
+		unsigned int col = (kx == 1 ? i : i % kx);
+		unsigned int row = i / kx;
+
+		// 0 - levy horni
+		if ( row + 1 >= ky || col == 0 ) { p->neighbours[0] = p; }
+		else { p->neighbours[0] = patches->at( (row + 1) * kx + (col - 1) ); }
+
+		// 1 - horni
+		if ( row + 1 >= ky ) { p->neighbours[1] = p; }
+		else { p->neighbours[1] = patches->at( (row + 1) * kx + col ); }
+
+		// 2 - pravy horni
+		if ( row + 1 >= ky || col + 1 >= kx) { p->neighbours[2] = p; }
+		else { p->neighbours[2] = patches->at( (row + 1) * kx + (col + 1) ); }
+
+		// 3 - pravy
+		if (col + 1 >= ky) { p->neighbours[3] = p; }
+		else { p->neighbours[3] = patches->at( row * kx + (col + 1) ); }
+
+		// 4 - pravy dolni
+		if (row == 0 || col + 1 >= ky) { p->neighbours[4] = p; }
+		else { p->neighbours[4] = patches->at( (row - 1) * kx + (col + 1) ); }
+
+		// 5 - dolni
+		if (row == 0) { p->neighbours[5] = p; }
+		else { p->neighbours[5] = patches->at( (row - 1) * kx + col ); }
+
+		// 6 - levy dolni
+		if (row == 0 || col == 0) { p->neighbours[6] = p; }
+		else { p->neighbours[6] = patches->at( (row - 1) * kx + (col - 1) ); }
+
+		// 7 - levy
+		if (col == 0) { p->neighbours[7] = p; }
+		else { p->neighbours[7] = patches->at( row * kx + (col - 1) ); }
 	}
 
 
