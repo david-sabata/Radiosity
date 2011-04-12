@@ -24,10 +24,23 @@ bool WaveFrontModel::parse(string filename) {
 	// pro udrzeni vertexu, dokud se z nich nebudou faces
 	vector<Vector3f>* vertices = new vector<Vector3f>();
 
+	bool ignoreGroup = false;
+
 	// parsovat po radcich
 	while (f.good()) {
 		getline(f, buffer);
 		line++;
+
+		// group
+		if (false && buffer.find("g ") == 0) {
+			if (buffer.find("_idle") != string::npos)
+				ignoreGroup = true;
+			else
+				ignoreGroup = false;
+		}
+
+		if (ignoreGroup)
+			continue;
 
 		// vertex
 		if (buffer.find("v ") == 0) {
@@ -52,7 +65,7 @@ bool WaveFrontModel::parse(string filename) {
 				cerr << "Warning: Ignoring [w] coordinate in '" << filename << "', line " << line << endl;
 			}
 
-			vertices->push_back(Vector3f(points[0], points[1], points[2]));
+			vertices->push_back(Vector3f(points[0]/1000, points[1]/1000, points[2]/1000));
 			continue;
 		}
 
@@ -82,7 +95,7 @@ bool WaveFrontModel::parse(string filename) {
 			}			
 
 			// zkontrolovat
-			if (faceVertices.size() < 4) {
+			if (faceVertices.size() != 4) {
 
 				// duplikovat posledni vrchol - degenerovany ctverec
 				//faceVertices.push_back( faceVertices.back() );
@@ -93,10 +106,13 @@ bool WaveFrontModel::parse(string filename) {
 
 			//cout << faceVertices[0] << "\t" << faceVertices[1] << "\t" << faceVertices[2] << "\t" << faceVertices[3] << endl;
 
+			try {
 			// vytvorit patch			
 			Patch* patch = new Patch( vertices->at(faceVertices[0]), vertices->at(faceVertices[1]), vertices->at(faceVertices[2]), vertices->at(faceVertices[3]) );
 			patches->push_back(patch);
+			} catch (out_of_range e) {
 
+			}
 			continue;
 		}
 		
