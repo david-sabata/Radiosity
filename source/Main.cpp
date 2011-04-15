@@ -26,7 +26,7 @@ using namespace std;
 // parametr pro subdivision
 #define MAX_PATCH_AREA 1
 
-const unsigned int OCL_WORKITEMS_X = 4;
+const unsigned int OCL_WORKITEMS_X = 8;
 const unsigned int OCL_WORKITEMS_Y = PATCHVIEW_TEX_H;
 const unsigned int OCL_SPANLENGTH = PATCHVIEW_TEX_W / OCL_WORKITEMS_X;
 
@@ -1307,15 +1307,22 @@ void OnIdle(CGL30Driver &driver)
 		// vynulovat index na ktery se zapisuje - nutne v kazde iteraci!
 		{
 			unsigned int writeindex = 0;
-			error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &writeindex,	0, NULL, NULL);
+			error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_writeindex, CL_FALSE, 0, sizeof(unsigned int), &writeindex,	0, NULL, NULL);
 		}
 		_ASSERT(error == CL_SUCCESS);		
 		
 		// pocet instanci programu		
-		const unsigned int global_work_size[] = { OCL_WORKITEMS_X, OCL_WORKITEMS_Y };
+		const unsigned int local_work_size[] = { OCL_WORKITEMS_X, 8 };
+		unsigned int global_work_size[] = { OCL_WORKITEMS_X, OCL_WORKITEMS_Y };
+
+		for(int i = 1; i < 2; ++ i) {
+			global_work_size[i] += local_work_size[i] - 1;
+			global_work_size[i] -= global_work_size[i] % local_work_size[i];
+		}
+		// round up
 		
 		// spustit program!
-		error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL, global_work_size, NULL, 0, NULL, NULL);		
+		error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, NULL);		
 		_ASSERT(error == CL_SUCCESS);
 
 		
@@ -1353,7 +1360,7 @@ void OnIdle(CGL30Driver &driver)
 			}
 
 			Patch* p = scenePatches[p_pids[i]];			
-			p->radiosity += emitter->radiosity * p_energies[i] * p->getReflectivity();
+			p->radiosity += emitter->radiosity * p_energies[i] * p->getReflectivity() * emitter->getColor();
 		}
 
 		// zdroj se vyzaril
