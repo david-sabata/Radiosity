@@ -5,9 +5,14 @@
 #include <stdio.h>
 #include <windows.h>
 
+// rozmery hemicube, resp. pohledove textury
+const unsigned int HEMICUBE_W = 256;
+const unsigned int HEMICUBE_H = 256;
 
-#define TEX_W 512
-#define TEX_H 384
+const unsigned int PATCHVIEW_TEX_W = unsigned int(HEMICUBE_W * 2);
+const unsigned int PATCHVIEW_TEX_H = unsigned int(HEMICUBE_H * 1.5);
+const unsigned int PATCHVIEW_TEX_RES = unsigned int(PATCHVIEW_TEX_W * PATCHVIEW_TEX_H);
+
 
 using namespace std;
 

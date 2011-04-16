@@ -171,3 +171,18 @@ uint32_t* Colors::getIndicesColors() {
 
 	return indicesColors;
 }
+
+/**
+ * Vraci aktualni korekci (pouziva se v OCL, kde se barvy prevadeji na indexy rucne)
+ */
+unsigned int Colors::getCorrection() {
+	return correction;
+}
+
+unsigned int* Colors::getRevMasks() {
+	return revMask;
+}
+
+short* Colors::getShifts() {
+	return shift;
+}
