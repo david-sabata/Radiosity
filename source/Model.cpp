@@ -37,6 +37,11 @@ void Model::subdivide(double area) {
 
 		if (p_new_patches == NULL) {
 			Patch* n = new Patch(*p);
+
+			// patch se nerozdelil, proto nezna sve sousedy (pouzivane pro interpolaci kreslenych barev); nastavit sebe sama
+			for (unsigned j = 0; i < 8; j++)
+				n->neighbours[j] = n;
+
 			patches->push_back(n);
 		} else {
 			patches->insert(patches->end(), p_new_patches->begin(), p_new_patches->end());
@@ -45,44 +50,4 @@ void Model::subdivide(double area) {
 	}
 
 	patches->erase(patches->begin(), patches->begin() + n_original_size);
-
-
-	/*
-	// prevest vektor na deque pro efektivnejsi praci s prvky
-	deque<Patch*>* deq = new deque<Patch*>();
-	deq->assign( patches->begin(), patches->end() ); 
-
-	// postupne brat prvky ze zacatku, delit je a vkladat na konec
-	int toBeChecked = deq->size();
-	
-	while (toBeChecked > 0) {
-		Patch* p = deq->front();
-		deq->pop_front();
-
-		// deleni zjistuje sam patch
-		vector<Patch*>* newPatches = p->divide(area);
-		
-		// jestlize je vysledkem deleni vektor, pripojit ho na konec fronty a puvodni patch odstranit
-		if (newPatches != NULL) {
-			// pripojit nove patche na konec fronty
-			deq->insert(deq->end(), newPatches->begin(), newPatches->end() );
-
-			// upravit pocet prvku ke zkontrolovani: odecist odebrany prvek a pricist jeho rozdelene casti
-			toBeChecked = toBeChecked - 1 + newPatches->size();
-
-			delete p;	// puvodni patch se nadobro zrusi
-			delete newPatches;	// uvolnit i vektor; ukazatele na patche uz jsou ve fronte
-		}
-		// jinak pripojime odebrany patch na konec a povazujeme ho za zkontrolovany
-		else {
-			deq->push_back(p);
-			toBeChecked--;
-		}
-	}
-
-	// prevest zpet na vektor
-	patches->reserve(deq->size());
-	patches->assign( deq->begin(), deq->end() );
-	delete deq;
-	*/
 }

@@ -41,17 +41,6 @@ Patch::~Patch(void) {
  * vraci NULL
  */
 vector<Patch*>* Patch::divide(double area) {	
-
-	// deleni bude probihat pouze pokud patch nema pocatecni vlastni energii
-	//if (radiosity.x > 0 || radiosity.y > 0 || radiosity.z > 0)
-	//	return NULL;
-
-
-	/*
-		vec4	vec3			D	CD	C
-						-->		DA	E	BC
-		vec1	vec2			A	AB	B
-	*/
 	
 	//cout << "====================" << endl;
 	//cout << "Deleni do plochy " << area << endl;
@@ -87,23 +76,6 @@ vector<Patch*>* Patch::divide(double area) {
 	if (S <= (area * 1.01) )
 		return NULL;	
 
-	/* puvodni deleni na ctvrtiny - nutne volat rekurzivne
-	// spocitat nove ctvrtinove patche
-	Vector3f AB = (A + B) / 2;
-	Vector3f BC = (B + C) / 2;
-	Vector3f CD = (C + D) / 2;
-	Vector3f DA = (D + A) / 2;
-	Vector3f E  = (A + C) / 2;
-
-	vector<Patch*>* patches = new vector<Patch*>;
-
-	patches->push_back( new Patch(A, AB, E, DA, this->color, this->illumination, this->radiosity) );
-	patches->push_back( new Patch(AB, B, BC, E, this->color, this->illumination, this->radiosity) );
-	patches->push_back( new Patch(BC, C, CD, E, this->color, this->illumination, this->radiosity) );
-	patches->push_back( new Patch(CD, D, DA, E, this->color, this->illumination, this->radiosity) );
-
-	//cout << "====================" << endl;
-	*/
 
 	double a = sqrt(area); // idealni delka strany rozdeleneho patche (za predpokladu ze je ctvercovy)	
 	
@@ -115,8 +87,6 @@ vector<Patch*>* Patch::divide(double area) {
 	// pomerne casti hran puvodniho patche
 	Vector3f pCD = (C - D) / float(kx); 
 	Vector3f pAB = (B - A) / float(kx); 
-
-	//cout << "kx: " << kx << "\t\tky:" << ky << endl;
 
 	vector<Patch*>* patches = new vector<Patch*>;
 
@@ -139,23 +109,6 @@ vector<Patch*>* Patch::divide(double area) {
 			Vector3f bCD3 = pCD * float(col) + D; // pozice rezu na horni strane
 			Vector3f bAB3 = pAB * float(col) + A; // pozice rezu na dolni strane
 			Vector3f nD = bAB3 + (( bCD3 - bAB3 ) / float(ky)) * float(row + 1);
-
-			
-			/*
-			cout << "col " << col << "\t\trow" << row << endl;
-			cout << "A\t\t" << A.x << "\t" << A.y << "\t" << A.z << endl;
-			cout << "B\t\t" << B.x << "\t" << B.y << "\t" << B.z << endl;
-			cout << "C\t\t" << C.x << "\t" << C.y << "\t" << C.z << endl;
-			cout << "D\t\t" << D.x << "\t" << D.y << "\t" << D.z << endl;
-			cout << "B-A\t\t" << (B-A).x << "\t" << (B-A).y << "\t" << (B-A).z << endl;
-			cout << "(B-A)/kx\t" << ((B-A)/kx).x << "\t" << ((B-A)/kx).y << "\t" << ((B-A)/kx).z << endl;
-			cout << "((B-A)/kx)*col\t" << (((B-A)/kx)*col).x << "\t" << (((B-A)/kx)*col).y << "\t" << (((B-A)/kx)*col).z << endl;
-			cout << "C-D\t\t" << (C-D).x << "\t" << (C-D).y << "\t" << (C-D).z << endl;
-			cout << "(C-D)/kx\t" << ((C-D)/kx).x << "\t" << ((C-D)/kx).y << "\t" << ((C-D)/kx).z << endl;
-			cout << "((C-D)/kx)*col\t" << (((C-D)/kx)*col).x << "\t" << (((C-D)/kx)*col).y << "\t" << (((C-D)/kx)*col).z << endl;
-			cout << "nA\t\t" << nA.x << "\t" << nA.y << "\t" << nA.z << endl;						
-			cout << endl;
-			*/
 			
 			Patch* p = new Patch( 							
 							nA, nB, nC, nD,						
@@ -231,7 +184,7 @@ vector<Patch*>* Patch::divide(double area) {
 			else { p->neighbours[6] = p; }
 		}
 		else if ( col == 0 ) { // prekroceni doleva
-			if ( row > 0 ) { p->neighbours[6] = patches->at( (row - 1) * col ); }
+			if ( row > 0 ) { p->neighbours[6] = patches->at( (row - 1) * kx + col ); }
 			else { p->neighbours[6] = p; }
 		}
 		else { 
