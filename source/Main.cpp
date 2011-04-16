@@ -1293,9 +1293,9 @@ void smoothShadePatch(uint32_t* colors, Patch* p) {
 	color_lb += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;
 	color_lb = color_lb / 4;
 	
-
-	colors[1] = Colors::packColor(color_lt);
-	colors[2] = Colors::packColor(color_rt);	
-	colors[3] = Colors::packColor(color_rb);
-	colors[0] = Colors::packColor(color_lb);	
+	
+	colors[0] = Colors::packColor(color_lb);
+	colors[1] = Colors::packColor(color_rb);
+	colors[2] = Colors::packColor(color_rt);
+	colors[3] = Colors::packColor(color_lt);	
 }

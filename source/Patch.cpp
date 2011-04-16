@@ -90,9 +90,11 @@ vector<Patch*>* Patch::divide(double area) {
 
 	vector<Patch*>* patches = new vector<Patch*>;
 
-	// [0, 0] je vlevo dole (odpovida bodu A)
-	for (unsigned int col = 0; col < kx; col++) {
-		for (unsigned int row = 0; row < ky; row++) {			
+	// [0, 0] je vlevo dole (odpovida bodu A)		
+	for (unsigned int i = 0; i < kx * ky; i++) {
+
+			unsigned int col = i % kx;
+			unsigned int row = i / kx;
 
 			Vector3f bCD = pCD * float(col) + D; // pozice rezu na horni strane
 			Vector3f bAB = pAB * float(col) + A; // pozice rezu na dolni strane
@@ -116,7 +118,6 @@ vector<Patch*>* Patch::divide(double area) {
 						);
 			
 			patches->push_back(p);		
-		}
 	}
 
 
@@ -129,16 +130,20 @@ vector<Patch*>* Patch::divide(double area) {
 
 		// 0 - levy horni
 		if ( row + 1 >= ky ) { // prekroceni nahoru
-			if (col > 0) { p->neighbours[0] = patches->at( row * kx + (col - 1)); }
-			else { p->neighbours[0] = p; }
+			if (col > 0) { 
+				p->neighbours[0] = patches->at( row * kx + (col - 1)); 				
+			} else { 
+				p->neighbours[0] = p; 
+			}
 		} 
 		else if ( col == 0 ) { // prekroceni doleva
-			if ( row + 1 < ky ) { p->neighbours[0] = patches->at( (row + 1) * kx + col ); }
-			else { p->neighbours[0] = p; }
+			if ( row + 1 < ky ) { 
+				p->neighbours[0] = patches->at( (row + 1) * kx + col ); 
+			} else { 
+				p->neighbours[0] = p; 
+			}
 		}
-		else { 
-			p->neighbours[0] = patches->at( (row + 1) * kx + (col - 1) ); 
-		}
+		else { p->neighbours[0] = patches->at( (row + 1) * kx + (col - 1) ); }
 
 		// 1 - horni
 		if ( row + 1 >= ky ) { p->neighbours[1] = p; }
@@ -146,16 +151,20 @@ vector<Patch*>* Patch::divide(double area) {
 
 		// 2 - pravy horni
 		if ( row + 1 >= ky ) { // prekroceni nahoru
-			if ( col + 1 < kx ) { p->neighbours[2] = patches->at( row * kx + (col + 1) ); }
-			else { p->neighbours[2] = p; }
+			if ( col + 1 < kx ) { 
+				p->neighbours[2] = patches->at( row * kx + (col + 1) ); 
+			} else { 
+				p->neighbours[2] = p; 
+			}
 		} 
 		else if ( col + 1 >= kx ) { // prekroceni doprava
-			if ( row + 1 < ky ) { p->neighbours[2] = patches->at( (row + 1) * kx + col ); }
-			else { p->neighbours[2] = p; }
+			if ( row + 1 < ky ) { 
+				p->neighbours[2] = patches->at( (row + 1) * kx + col ); 
+			} else { 
+				p->neighbours[2] = p;
+			}
 		} 
-		else { 
-			p->neighbours[2] = patches->at( (row + 1) * kx + (col + 1) ); 
-		}
+		else { p->neighbours[2] = patches->at( (row + 1) * kx + (col + 1) ); }
 
 		// 3 - pravy
 		if (col + 1 >= kx) { p->neighbours[3] = p; }
@@ -163,16 +172,20 @@ vector<Patch*>* Patch::divide(double area) {
 
 		// 4 - pravy dolni
 		if (row == 0) { // prekroceni dolu
-			if ( col + 1 < kx ) { p->neighbours[4] = patches->at( row * kx + (col + 1) ); }
-			else { p->neighbours[4] = p; }
+			if ( col + 1 < kx ) { 
+				p->neighbours[4] = patches->at( row * kx + (col + 1) ); 
+			} else { 
+				p->neighbours[4] = p; 
+			}
 		}
 		else if ( col + 1 >= kx ) { // prekroceni doprava
-			if ( row > 0 ) { p->neighbours[4] = patches->at( (row - 1) * kx + col ); }
-			else { p->neighbours[4] = p; }
+			if ( row > 0 ) { 
+				p->neighbours[4] = patches->at( (row - 1) * kx + col ); 
+			} else { 
+				p->neighbours[4] = p;
+			}
 		}
-		else { 
-			p->neighbours[4] = patches->at( (row - 1) * kx + (col + 1) ); 
-		}
+		else { p->neighbours[4] = patches->at( (row - 1) * kx + (col + 1) ); }
 
 		// 5 - dolni
 		if (row == 0) { p->neighbours[5] = p; }
@@ -180,16 +193,20 @@ vector<Patch*>* Patch::divide(double area) {
 
 		// 6 - levy dolni
 		if (row == 0) { // prekroceni dolu
-			if ( col > 0 ) { p->neighbours[6] = patches->at( row * kx + (col - 1) ); }
-			else { p->neighbours[6] = p; }
+			if ( col > 0 ) { 
+				p->neighbours[6] = patches->at( row * kx + (col - 1) ); 
+			} else { 
+				p->neighbours[6] = p; 
+			}
 		}
 		else if ( col == 0 ) { // prekroceni doleva
-			if ( row > 0 ) { p->neighbours[6] = patches->at( (row - 1) * kx + col ); }
-			else { p->neighbours[6] = p; }
+			if ( row > 0 ) { 
+				p->neighbours[6] = patches->at( (row - 1) * kx + col ); 
+			} else { 
+				p->neighbours[6] = p; 
+			}
 		}
-		else { 
-			p->neighbours[6] = patches->at( (row - 1) * kx + (col - 1) ); 
-		}
+		else { p->neighbours[6] = patches->at( (row - 1) * kx + (col - 1) ); }
 
 		// 7 - levy
 		if (col == 0) { p->neighbours[7] = p; }
