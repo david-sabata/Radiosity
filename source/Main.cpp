@@ -714,8 +714,8 @@ void CleanupCLObjects() {
  *	@brief vykresli uzivatelsky pohled do sceny (skutecne barvy patchu)
  */
 void DrawScene() {		
+	//glBindVertexArray(n_color_array_object[0]);
 	glBindVertexArray(n_vertex_array_object);
-	//glVertexAttribP1ui(1, GL_UNSIGNED_INT_2_10_10_10_REV, false, 1024);
 	glDrawElements(GL_TRIANGLES, scene.getIndicesCount(), GL_UNSIGNED_INT, p_OffsetInVBO(0));
 	
 	// vratime VAO 0, abychom si nahodne VAO nezmenili (pripadne osetreni 

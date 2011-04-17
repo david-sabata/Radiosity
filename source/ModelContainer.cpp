@@ -46,7 +46,7 @@ void ModelContainer::load() {
 		addModel(block);
 	}
 
-	if (0) {
+	else {
 		//Model* test = new WaveFrontModel("../models/simple_box.obj");
 		//Model* test = new WaveFrontModel("../models/chair.obj");
 		Model* test = new WaveFrontModel("../models/VUT_final.obj");

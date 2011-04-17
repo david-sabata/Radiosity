@@ -33,7 +33,7 @@ bool WaveFrontModel::parse(string filename) {
 
 		// group
 		if (false && buffer.find("g ") == 0) {
-			if (buffer.find("_idle") != string::npos)
+			if (buffer.find("_idle") != string::npos && false)
 				ignoreGroup = true;
 			else
 				ignoreGroup = false;
@@ -93,6 +93,10 @@ bool WaveFrontModel::parse(string filename) {
 				else
 					buffer.erase(0, pos+1);
 			}			
+
+			// doplnit trojuhelniky na degenerovane ctyruhelniky
+			if (faceVertices.size() == 3)
+				faceVertices.push_back( faceVertices.back() );
 
 			// zkontrolovat
 			if (faceVertices.size() != 4) {
