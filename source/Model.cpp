@@ -39,8 +39,10 @@ void Model::subdivide(double area) {
 			Patch* n = new Patch(*p);
 
 			// patch se nerozdelil, proto nezna sve sousedy (pouzivane pro interpolaci kreslenych barev); nastavit sebe sama
-			for (unsigned j = 0; i < 8; j++)
-				n->neighbours[j] = n;
+			for (unsigned j = 0; j < 8; j++) {
+				if (n->neighbours[j] == NULL) // osetreni pro nacitani, kde jsou patche jiz rozdelene a sousedy znaji
+					n->neighbours[j] = n;
+			}
 
 			patches->push_back(n);
 		} else {

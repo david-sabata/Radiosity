@@ -1,5 +1,9 @@
 #include "Patch.h"
 
+Patch::Patch() {
+	for (int i = 0; i < 8; i++)
+		neighbours[i] = NULL;
+}
 
 Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4)
 		: vec1(vec1), vec2(vec2), vec3(vec3), vec4(vec4), 

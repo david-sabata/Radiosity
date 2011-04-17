@@ -19,7 +19,7 @@
 #include "Shaders.h"
 #include "Timer.h"
 #include "FormFactors.h"
-
+#include "LoadingModel.h"
 
 using namespace std;
 
@@ -57,8 +57,9 @@ CGL30Driver driver;
 void OnIdle(CGL30Driver &driver);
 void onResize(int n_x, int n_y, int n_new_width, int n_new_height);
 LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_param);
-void smoothShadePatches(uint32_t* colors);
 void smoothShadePatch(uint32_t* colors, Patch* p);
+void SaveToFile();
+void LoadFromFile();
 // prototypy funkci
 
 static GLuint n_patchlook_texture;
@@ -233,7 +234,7 @@ bool InitGLObjects() {
 		unsigned int indCnt = scene.getPatchesCount() * 4; // pocet neopakujicich se indexu
 		uint32_t* colorData = new uint32_t[indCnt];
 		for (unsigned int i=0; i < indCnt; i++) {
-			colorData[i] = Colors::packColor( patches[i/4]->illumination ); // vychozi illuminance patchu (maji jen svetla)
+			colorData[i] = Colors::packColor( patches[i/4]->illumination * patches[i/4]->getColor() ); // vychozi illuminance patchu (maji jen svetla)
 		}
 		glBufferData(GL_ARRAY_BUFFER, indCnt * sizeof(uint32_t), colorData, GL_DYNAMIC_DRAW);
 		delete[] colorData;
@@ -732,24 +733,25 @@ void DrawPatchLook(unsigned int interval) {
 	int* indices = scene.getIndices();
 	float* vertices = scene.getVertices();
 
+	// kreslit cernou barvu mimo aktivni interval ve dvou krocich
 	if (patchIntervals.size() > 1) {
 		glBindVertexArray(n_vertex_array_object);
 		glVertexAttrib3f(1, 0.0f, 0.0f, 0.0f); // vse cerne
-	}
 
-	// vykreslit cerne vse pred aktivnim intervalem
-	if (interval > 0) {
-		int fromIndex = 0;
-		int count = 6 * patchIntervals[interval - 1].to; // kreslit indexy od 0 az po posledni pred aktivnim intervalem
-		glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
-	}
+		// vykreslit cerne vse pred aktivnim intervalem
+		if (interval > 0) {
+			int fromIndex = 0;
+			int count = 6 * patchIntervals[interval - 1].to; // kreslit indexy od 0 az po posledni pred aktivnim intervalem
+			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
+		}
 			
-	// vykresli cerne vse za aktivnim intervalem
-	if (interval < patchIntervals.size()-1) {
-		int fromIndex = 6 * patchIntervals[interval + 1].from;
-		int count = 6 * (patchIntervals.back().to - patchIntervals[interval + 1].from);
-		glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
-	}						
+		// vykresli cerne vse za aktivnim intervalem
+		if (interval < patchIntervals.size()-1) {
+			int fromIndex = 6 * patchIntervals[interval + 1].from;
+			int count = 6 * (patchIntervals.back().to - patchIntervals[interval + 1].from);
+			glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, p_OffsetInVBO( fromIndex * sizeof(int) ));
+		}						
+	}
 		
 	// vykresli jeden interval s barevnymi patchi
 	glBindVertexArray(n_color_array_object[interval]);	
@@ -956,6 +958,16 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 				if (n_w_param == VK_ESCAPE || n_w_param == 0x51)
 					SendMessage(h_wnd, WM_CLOSE, 0, 0);
 				
+				// Ctrl + S
+				if (n_w_param == 0x53 && (GetKeyState(VK_CONTROL) & 0xF0)) {
+					SaveToFile();
+				}
+
+				// Ctrl + O
+				if (n_w_param == 0x4F && (GetKeyState(VK_CONTROL) & 0xF0)) {
+					LoadFromFile();
+				}
+
 				// E
 				if (n_w_param == 0x45) {
 					/*
@@ -1202,241 +1214,247 @@ void OnIdle(CGL30Driver &driver)
 	// Vykreslit do FBO pohled z patche
 	// ***********************************************************************************
 
-	// pouzije shader pro uzivatelsky pohled
-	glUseProgram(n_patch_program_object);
+	// v pripade, ze scena neni nactena, nesnazit se renderovat do textury
+	// ani pocitat radiozitu    (podminka by mela by vzdy splnena)
+	if (scenePatchesCount > 0) {
 
-	fbo->Bind();
-	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
+		// pouzije shader pro uzivatelsky pohled
+		glUseProgram(n_patch_program_object);
 
-	glViewport(0, 0, fbo->n_Width(), fbo->n_Height());
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // vycisti buffery
+		fbo->Bind();
+		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
 
-	Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,
-		Camera::PATCH_LOOK_LEFT, Camera::PATCH_LOOK_RIGHT, Camera::PATCH_LOOK_FRONT};
+		glViewport(0, 0, fbo->n_Width(), fbo->n_Height());
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // VYCISTI SPECIFIKOVANY OBDE
 
-	// 'okna' do kterych se budou kreslit jednotlive pohledy; odpovida 'nakresu' v FormFactors.cpp
-	// x, y, w, h		(0,0 = levy dolni roh)
-	int p_viewport_list[][4] = {
-		{	0,						HEMICUBE_H,		HEMICUBE_W,	HEMICUBE_H	},
-		{	HEMICUBE_W,				HEMICUBE_H/2,	HEMICUBE_W,	HEMICUBE_H	},
-		{	-1*int(HEMICUBE_W/2),	0,				HEMICUBE_W,	HEMICUBE_H	},
-		{	int(HEMICUBE_W*1.5),	0,				HEMICUBE_W,	HEMICUBE_H	},
-		{	HEMICUBE_W/2,			0,				HEMICUBE_W, HEMICUBE_H	}
-	};
+		// 'okna' do kterych se budou kreslit jednotlive pohledy; odpovida 'nakresu' v FormFactors.cpp
+		// x, y, w, h		(0,0 = levy dolni roh)
+		int p_viewport_list[][4] = {
+			{	0,						HEMICUBE_H,		HEMICUBE_W,	HEMICUBE_H	},
+			{	HEMICUBE_W,				HEMICUBE_H/2,	HEMICUBE_W,	HEMICUBE_H	},
+			{	-1*int(HEMICUBE_W/2),	0,				HEMICUBE_W,	HEMICUBE_H	},
+			{	int(HEMICUBE_W*1.5),	0,				HEMICUBE_W,	HEMICUBE_H	},
+			{	HEMICUBE_W/2,			0,				HEMICUBE_W, HEMICUBE_H	}
+		};
 
-	// oblasti v texture, do kterych je povoleno kreslit;
-	// jelikoz se nektere casti kresli pres sebe, muze pri kresleni 'pruhledna' vznikat
-	// nezadouci zviditelneni drive vykreslene casti pohledu, ktery ale ma byt skryty, coz resi glScissor
-	// 
-	// x, y, w, h
-	int p_scissors_list[][4] = {
-		{	0,						HEMICUBE_H,		HEMICUBE_W,		HEMICUBE_H/2	},
-		{	HEMICUBE_W,				HEMICUBE_H,		HEMICUBE_W,		HEMICUBE_H/2	},
-		{	0,						0,				HEMICUBE_W/2,	HEMICUBE_H		},
-		{	int(HEMICUBE_W*1.5),	0,				HEMICUBE_W/2,	HEMICUBE_H		},
-		{	HEMICUBE_W/2,			0,				HEMICUBE_W,		HEMICUBE_H		}
-	};
+		// oblasti v texture, do kterych je povoleno kreslit;
+		// jelikoz se nektere casti kresli pres sebe, muze pri kresleni 'pruhledna' vznikat
+		// nezadouci zviditelneni drive vykreslene casti pohledu, ktery ale ma byt skryty, coz resi glScissor
+		// 
+		// x, y, w, h
+		int p_scissors_list[][4] = {
+			{	0,						HEMICUBE_H,		HEMICUBE_W,		HEMICUBE_H/2	},
+			{	HEMICUBE_W,				HEMICUBE_H,		HEMICUBE_W,		HEMICUBE_H/2	},
+			{	0,						0,				HEMICUBE_W/2,	HEMICUBE_H		},
+			{	int(HEMICUBE_W*1.5),	0,				HEMICUBE_W/2,	HEMICUBE_H		},
+			{	HEMICUBE_W/2,			0,				HEMICUBE_W,		HEMICUBE_H		}
+		};
 
-	// najit patch s nejvetsi energii
-	unsigned int patchId = scene.getHighestRadiosityPatchId();
+		// smery pohledu pro jednotlive casti textury
+		Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,
+			Camera::PATCH_LOOK_LEFT, Camera::PATCH_LOOK_RIGHT, Camera::PATCH_LOOK_FRONT};
 
-	glEnable(GL_SCISSOR_TEST);
+		// najit patch s nejvetsi energii
+		unsigned int patchId = scene.getHighestRadiosityPatchId();
 
-	// celkem 5 pohledu
-	for(int i=0; i < 5; i++) {
+		glEnable(GL_SCISSOR_TEST);
+
+		// celkem 5 pohledu
+		for(int i=0; i < 5; i++) {
 				
-		Camera::PatchLook dir = p_patchlook_perm[i];
+			Camera::PatchLook dir = p_patchlook_perm[i];
 
-		// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
-		{
-			// matice perspektivni projekce
-			Matrix4f t_projection;
-			CGLTransform::Perspective(t_projection, 90, 1.0f, 0.01f, 1000);		 // RATIO JE 1.0!!!
+			// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
+			{
+				// matice perspektivni projekce
+				Matrix4f t_projection;
+				CGLTransform::Perspective(t_projection, 90, 1.0f, 0.01f, 1000);		 // RATIO JE 1.0!!!
 		
-			// modelview
-			Matrix4f t_modelview;
-			t_modelview.Identity();				
+				// modelview
+				Matrix4f t_modelview;
+				t_modelview.Identity();				
 
-			// vynasobit pohledem kamery patche
-			patchCam.lookFromPatch(scenePatches[patchId], dir);
-			t_modelview *= patchCam.GetMatrix();
+				// vynasobit pohledem kamery patche
+				patchCam.lookFromPatch(scenePatches[patchId], dir);
+				t_modelview *= patchCam.GetMatrix();
 
-			// matice pohledu kamery
-			t_mvp = t_projection * t_modelview;
+				// matice pohledu kamery
+				t_mvp = t_projection * t_modelview;
+			}
+
+			// nahrajeme matici do OpenGL jako parametr shaderu
+			glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
+
+			// nastavit parametry viewportu a oblast, do ktere je povoleno kreslit
+			glScissor(p_scissors_list[i][0], p_scissors_list[i][1], p_scissors_list[i][2], p_scissors_list[i][3]);
+			glViewport(p_viewport_list[i][0], p_viewport_list[i][1], p_viewport_list[i][2], p_viewport_list[i][3]);
+		
+			// vykreslit do textury (pres FBO)		
+			unsigned int interval = step % patchIntervals.size();
+			DrawPatchLook(interval);
 		}
 
-		// nahrajeme matici do OpenGL jako parametr shaderu
-		glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
+		glDisable(GL_SCISSOR_TEST);
 
-		// nastavit parametry viewportu a oblast, do ktere je povoleno kreslit
-		glScissor(p_scissors_list[i][0], p_scissors_list[i][1], p_scissors_list[i][2], p_scissors_list[i][3]);
-		glViewport(p_viewport_list[i][0], p_viewport_list[i][1], p_viewport_list[i][2], p_viewport_list[i][3]);
-		
-		// vykreslit do textury (pres FBO)		
-		unsigned int interval = step % patchIntervals.size();
-		DrawPatchLook(interval);
-	}
-
-	glDisable(GL_SCISSOR_TEST);
-
-	fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
-	fbo->Release();
+		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
+		fbo->Release();
 	
 
 
 
 
-	// zpracovat vyrenderovanou texturu?
-	if (computeRadiosity) {	
+
+		// zpracovat vyrenderovanou texturu?
+		if (computeRadiosity) {	
 		
-		cl_int error = 0;		
+			cl_int error = 0;		
 		
-		/*
-		// ziskat data z textury a zkopirovat je do OCL bufferu
-		unsigned int* data = new unsigned int[PATCHVIEW_TEX_RES]; // alokovat predem		
-		glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); 
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);		
-		glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu, data uz jsou zkopirovana do pameti
-		//memset(data, 0, PATCHVIEW_TEX_RES*sizeof(unsigned int));
-		error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, PATCHVIEW_TEX_RES*sizeof(uint32_t), data, 0, NULL, NULL);
-		delete[] data;	// uz jsou v bufferu
-		*/
+			/*
+			// ziskat data z textury a zkopirovat je do OCL bufferu
+			unsigned int* data = new unsigned int[PATCHVIEW_TEX_RES]; // alokovat predem		
+			glBindTexture(GL_TEXTURE_2D, n_patchlook_texture); 
+			glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, data);		
+			glBindTexture(GL_TEXTURE_2D, 0); // odbindovat texturu, data uz jsou zkopirovana do pameti
+			//memset(data, 0, PATCHVIEW_TEX_RES*sizeof(unsigned int));
+			error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_patchview, CL_TRUE, 0, PATCHVIEW_TEX_RES*sizeof(uint32_t), data, 0, NULL, NULL);
+			delete[] data;	// uz jsou v bufferu
+			*/
 
-		// ziskat pristup k OGL texture s pohledem z patche		
-		glFinish(); // nutne pro sync
-		error |= clEnqueueAcquireGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
+			// ziskat pristup k OGL texture s pohledem z patche		
+			glFinish(); // nutne pro sync
+			error |= clEnqueueAcquireGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
 
-		// vynulovat index na ktery se zapisuje - nutne v kazde iteraci!
-		{
-			unsigned int writeindex = 0;
-			error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_writeindex, CL_FALSE, 0, sizeof(unsigned int), &writeindex,	0, NULL, NULL);
-		}
-		_ASSERT(error == CL_SUCCESS);		
+			// vynulovat index na ktery se zapisuje - nutne v kazde iteraci!
+			{
+				unsigned int writeindex = 0;
+				error |= clEnqueueWriteBuffer(ocl_queue, ocl_arg_writeindex, CL_FALSE, 0, sizeof(unsigned int), &writeindex,	0, NULL, NULL);
+			}
+			_ASSERT(error == CL_SUCCESS);		
 		
-		// pocet instanci programu		
-		const unsigned int local_work_size[] = { OCL_WORKITEMS_X, 8 };
-		unsigned int global_work_size[] = { OCL_WORKITEMS_X, OCL_WORKITEMS_Y };
+			// pocet instanci programu		
+			const unsigned int local_work_size[] = { OCL_WORKITEMS_X, 8 };
+			unsigned int global_work_size[] = { OCL_WORKITEMS_X, OCL_WORKITEMS_Y };
 
-		for(int i = 1; i < 2; ++ i) {
-			global_work_size[i] += local_work_size[i] - 1;
-			global_work_size[i] -= global_work_size[i] % local_work_size[i];
-		}
-		// round up
+			for(int i = 1; i < 2; ++ i) {
+				global_work_size[i] += local_work_size[i] - 1;
+				global_work_size[i] -= global_work_size[i] % local_work_size[i];
+			}
+			// round up
 		
-		// spustit program!
-		error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, NULL);		
-		_ASSERT(error == CL_SUCCESS);
+			// spustit program!
+			error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, NULL);		
+			_ASSERT(error == CL_SUCCESS);
 
 		
-		// zjistit kolik polygonu*instanci se ulozilo (pocet je vzdy ruzny v zavislosti na pohledu a rozlozeni work-items)
-		unsigned int n_last_index = 0;
-		error = clEnqueueReadBuffer (ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &n_last_index, 0, NULL, NULL);
-		_ASSERT(error == CL_SUCCESS);
+			// zjistit kolik polygonu*instanci se ulozilo (pocet je vzdy ruzny v zavislosti na pohledu a rozlozeni work-items)
+			unsigned int n_last_index = 0;
+			error = clEnqueueReadBuffer (ocl_queue, ocl_arg_writeindex, CL_TRUE, 0, sizeof(unsigned int), &n_last_index, 0, NULL, NULL);
+			_ASSERT(error == CL_SUCCESS);
 
-		// alokovat podle potreby (poctu indexu na ktere se zapsalo)
-		uint32_t* p_pids = new uint32_t[n_last_index];
-		float* p_energies = new float[n_last_index];
+			// alokovat podle potreby (poctu indexu na ktere se zapsalo)
+			uint32_t* p_pids = new uint32_t[n_last_index];
+			float* p_energies = new float[n_last_index];
 
-		// precist data
-		error  = clEnqueueReadBuffer (ocl_queue, ocl_arg_ids, CL_TRUE, 0, n_last_index*sizeof(uint32_t), p_pids, 0, NULL, NULL);
-		error |= clEnqueueReadBuffer (ocl_queue, ocl_arg_energies, CL_TRUE, 0, n_last_index*sizeof(float), p_energies, 0, NULL, NULL);		
-		_ASSERT(error == CL_SUCCESS);
+			// precist data
+			error  = clEnqueueReadBuffer (ocl_queue, ocl_arg_ids, CL_TRUE, 0, n_last_index*sizeof(uint32_t), p_pids, 0, NULL, NULL);
+			error |= clEnqueueReadBuffer (ocl_queue, ocl_arg_energies, CL_TRUE, 0, n_last_index*sizeof(float), p_energies, 0, NULL, NULL);		
+			_ASSERT(error == CL_SUCCESS);
 
-		// uvolnit OGL objekty z drzeni OCL
-		clFinish(ocl_queue); // nutne pro sync
-		error |= clEnqueueReleaseGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
-		_ASSERT(error == CL_SUCCESS);
+			// uvolnit OGL objekty z drzeni OCL
+			clFinish(ocl_queue); // nutne pro sync
+			error |= clEnqueueReleaseGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
+			_ASSERT(error == CL_SUCCESS);
 
-
-		// nabindovat buffer s barvami patchu
-		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+			// nabindovat buffer s barvami patchu
+			glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 		
-		Patch* emitter = scenePatches[patchId]; // patch ze ktereho se koukalo
+			Patch* emitter = scenePatches[patchId]; // patch ze ktereho se koukalo
 		
-		// prenest energie
-		for (unsigned int i = 0; i < n_last_index; i++) {			
+			// prenest energie
+			for (unsigned int i = 0; i < n_last_index; i++) {			
 
-			if (p_pids[i] >= scenePatchesCount) {
-				cerr << "! warning !\t uknown patch id: " << p_pids[i] << endl;
-				continue;
+				if (p_pids[i] >= scenePatchesCount) {
+					cerr << "! warning !\t uknown patch id: " << p_pids[i] << endl;
+					continue;
+				}
+
+				Patch* p = scenePatches[p_pids[i]];			
+				p->radiosity += emitter->radiosity * p_energies[i] * p->getReflectivity() * emitter->getColor();
 			}
 
-			Patch* p = scenePatches[p_pids[i]];			
-			p->radiosity += emitter->radiosity * p_energies[i] * p->getReflectivity() * emitter->getColor();
-		}
-
-		// zdroj se vyzaril
-		emitter->illumination += emitter->radiosity;
-		emitter->radiosity = Vector3f(0.0f, 0.0f, 0.0f);
+			// zdroj se vyzaril
+			emitter->illumination += emitter->radiosity;
+			emitter->radiosity = Vector3f(0.0f, 0.0f, 0.0f);
 				
-		if (emitter->illumination.x > 1.0)
-			emitter->illumination.x = 1.0;
-		if (emitter->illumination.y > 1.0)
-			emitter->illumination.y = 1.0;
-		if (emitter->illumination.z > 1.0)
-			emitter->illumination.z = 1.0;
+			if (emitter->illumination.x > 1.0)
+				emitter->illumination.x = 1.0;
+			if (emitter->illumination.y > 1.0)
+				emitter->illumination.y = 1.0;
+			if (emitter->illumination.z > 1.0)
+				emitter->illumination.z = 1.0;
 		
-		// vypocitat nove barvy patchu, ktere se budou zobrazovat
-		for (unsigned int i = 0; i < scenePatchesCount; i++) {
-			Patch* p = scenePatches[i];
+
+			// vypocitat nove barvy patchu, ktere se budou zobrazovat
+			for (unsigned int i = 0; i < scenePatchesCount; i++) {
+				Patch* p = scenePatches[i];
 			
-			uint32_t newData[4];
-			smoothShadePatch(newData, p);
+				uint32_t newData[4];
+				smoothShadePatch(newData, p);
 
-			glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-		}
-		
-		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
-		
-
-		// nabindovat VBO s radiativnimi energiemi a updatovat jej
-		glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
-		uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-		if (buffer != NULL) { // TODO: better!
-			for (unsigned int i=0; i < scenePatchesCount; i++) {				
-				uint32_t newColor = Colors::packColor(scenePatches[i]->radiosity);
-				uint32_t newData[4] = {
-					newColor,
-					newColor,
-					newColor,
-					newColor
-				};
-
-				memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+				glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 			}
-
-			if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
-				cerr << "Chyba pri uvolneni mapovani VBO" << endl;
-		} else
-			cerr << "Chyba pri mapovani VBO" << endl;
-
-		glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
+		
+			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		
 
-		// uklidit
-		delete[] p_pids;
-		delete[] p_energies;
+			// nabindovat VBO s radiativnimi energiemi a updatovat jej
+			glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
+			uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+			if (buffer != NULL) { // TODO: better!
+				for (unsigned int i=0; i < scenePatchesCount; i++) {				
+					uint32_t newColor = Colors::packColor(scenePatches[i]->radiosity);
+					uint32_t newData[4] = {
+						newColor,
+						newColor,
+						newColor,
+						newColor
+					};
+
+					memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+				}
+
+				if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
+					cerr << "Chyba pri uvolneni mapovani VBO" << endl;
+			} else
+				cerr << "Chyba pri mapovani VBO" << endl;
+
+			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
+		
+
+			// uklidit
+			delete[] p_pids;
+			delete[] p_energies;
 
 
 		
-		// zbyvajici energie ve scene
-		float total = 0;
-		for (unsigned int i = 0; i < scenePatchesCount; i++)
-			total += scenePatches[i]->radiosity.f_Length2();
+			// zbyvajici energie ve scene
+			float total = 0;
+			for (unsigned int i = 0; i < scenePatchesCount; i++)
+				total += scenePatches[i]->radiosity.f_Length2();
 
-		if (total < 0.1) {
-			if (debugOutput)
-				cout << "pass " << passCounter << ", done!" << endl;
-			computeRadiosity = false; 
-		} else if (debugOutput)	
-			cout << "pass " << passCounter << ", " << setprecision(10) << total << " energy left" << endl;
+			if (total < 0.1) {
+				if (debugOutput)
+					cout << "pass " << passCounter << ", done!" << endl;
+				computeRadiosity = false; 
+			} else if (debugOutput)	
+				cout << "pass " << passCounter << ", " << setprecision(10) << total << " energy left" << endl;
 		
-		passCounter++;
+			passCounter++;
 
-		//computeRadiosity = false;
+			
+		} // if computeRadiosity
+
 	}
-
-
 
 	// ***********************************************************************************
 	// Vykreslit na obrazovku uzivatelsky pohled + nahledovy kriz
@@ -1549,4 +1567,195 @@ void smoothShadePatch(uint32_t* colors, Patch* p) {
 	colors[1] = Colors::packColor(color_rb);
 	colors[2] = Colors::packColor(color_rt);
 	colors[3] = Colors::packColor(color_lt);	
+}
+
+/**
+ * Otevre dialog na vyber souboru odkud se nactou obsahy bufferu
+ */
+void LoadFromFile() {
+	
+	OPENFILENAME ofn;	// struktura dialogu
+	char szFile[260];	// buffer pro cestu k souboru		
+
+	// naplnit strukturu parametry dialogu
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = h_wnd;	// rodicovske okno
+	ofn.lpstrFile = szFile; // cesta
+	ofn.lpstrFile[0] = '\0'; // vynulovat cestu, nechceme zadnou predvyplnenou
+	ofn.nMaxFile = sizeof(szFile);
+	ofn.lpstrFilter = "Radiosity Renderer File\0*.rr\0\0"; // pouze soubory *.rr
+	ofn.nFilterIndex = 1; // vychozi filtr
+	ofn.lpstrFileTitle = NULL; // zadny soubor neni vybrany
+	ofn.lpstrInitialDir = NULL; // zadny vychozi adresar
+	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+	// povolit kurzor
+	ShowCursor(true);
+
+	if (GetOpenFileName(&ofn)==TRUE) {
+		cout << "Reading from " << ofn.lpstrFile << endl;
+
+		FILE* fp = fopen(ofn.lpstrFile, "rb");
+		if (fp == NULL) {
+			cerr << "Unable to open the file" << endl;
+		} else {
+			bool error = false;
+			size_t read;
+
+			// nacist patche ------------------------------			
+			unsigned long count;
+			read = fread(&count, sizeof(unsigned long), 1, fp);
+			if (read != 1)
+				error = true;
+
+			Patch* data = new Patch[count];
+			read = fread(data, sizeof(Patch), count, fp);
+			if (read != count)
+				error = true;
+			
+
+			// rekonstruovat scenu ------------------------
+			if (!error) {
+				// uvolnit GL objekty
+				CleanupGLObjects();
+
+				// zresetovat staticke objekty
+				patchIntervals.clear();
+
+				// vytvorit novou scenu
+				scene = ModelContainer::ModelContainer();
+				scene.maxPatchArea = MAX_PATCH_AREA;
+
+				// vytvorit z nactenych patchu model, ktery vlozime do sceny
+				Model* dummy = new LoadingModel(data, count);
+				scene.addModel(dummy);
+
+				// znovu inicializovat GL, naplnit buffery, ...
+				if (!InitGLObjects())
+					error = true;
+
+				delete[] data;
+			}
+
+			// provest vyhlazovani, at je obraz pekny ikdyz se rad. jeste nepocita
+			{
+				Patch** scenePatches = scene.getPatches();
+				glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+				for (unsigned int i = 0; i < count; i++) {
+					Patch* p = scenePatches[i];
+			
+					uint32_t newData[4];
+					smoothShadePatch(newData, p);
+
+					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+				}		
+				glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
+			}
+
+			// pokud probihal vypocet, zastavit jej
+			computeRadiosity = false;
+
+			if (!error)
+				cout << "Done!" << endl;
+			else
+				cerr << "An error occured!" << endl;
+
+			fclose(fp);
+		}
+	}
+	
+	ShowCursor(false);
+}
+
+
+
+/**
+ * Otevre dialog na vyber souboru, kam se ulozi patche ve scene (z nich je mozne zrekonstruovat jiz osvetlenou scenu)
+ */
+void SaveToFile() {
+	
+	OPENFILENAME ofn;	// struktura dialogu
+	char szFile[260];	// buffer pro cestu k souboru		
+
+	// naplnit strukturu parametry dialogu
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = h_wnd;	// rodicovske okno
+	ofn.lpstrFile = szFile; // cesta
+	ofn.lpstrFile[0] = '\0'; // vynulovat cestu, nechceme zadnou predvyplnenou
+	ofn.nMaxFile = sizeof(szFile);
+	ofn.lpstrFilter = "Radiosity Renderer File\0*.rr\0\0"; // pouze soubory *.rr
+	ofn.lpstrDefExt = "rr\0"; // vychozi pripona
+	ofn.nFilterIndex = 1; // vychozi filtr
+	ofn.lpstrFileTitle = NULL; // zadny soubor neni vybrany
+	ofn.lpstrInitialDir = NULL; // zadny vychozi adresar
+	ofn.Flags = OFN_OVERWRITEPROMPT; // uzivatel musi potvrdit pripadne prepsani
+
+	// povolit kurzor
+	ShowCursor(true);
+
+	if (GetSaveFileName(&ofn)==TRUE) {
+		cout << "Saving to " << szFile << endl;
+		
+		FILE* fp = fopen(ofn.lpstrFile, "wb");
+				
+		if (fp == NULL) {
+			cerr << "Unable to create the file" << endl;
+		} else {
+
+			bool error = false;
+			size_t written;
+
+			// patche --------------------------------------------
+			{
+				unsigned long count = scene.getPatchesCount();
+				Patch** patches = scene.getPatches();
+				
+				// prevest pole ukazatelu na pole patchu
+				Patch* data = new Patch[count];
+				for (unsigned long i = 0; i < count; i++) {
+					data[i] = (*patches[i]);
+				}
+
+				// v patchich jsou ukazatele na sousedy - prevedeme je na relativni (cisla) ukazatele v ramci sceny
+				for (unsigned long i = 0; i < count; i++) {
+					
+					for (unsigned int n = 0; n < 8; n++) { // pro kazdeho souseda
+						
+						for (unsigned long j = 0; j < count; j++) {
+							if (patches[i]->neighbours[n] == patches[j]) {
+								data[i].relativeNeighbours[n] = j;
+								data[i].neighbours[n] = NULL;
+								break;
+							}
+						}
+
+					}
+
+				}
+
+				// prvni ulozena hodnota je pocet patchu
+				written = fwrite(&count, sizeof(unsigned long), 1, fp);
+				if (written != 1)
+					error = true;
+
+				// nasleduji data
+				written = fwrite(data, sizeof(Patch), count, fp);
+				if (written != count)
+					error = true;
+			}
+			
+			
+			if (!error)
+				cout << "Done!" << endl;
+			else
+				cerr << "An error occured!" << endl;
+
+			fclose(fp);			
+		}
+		
+	}
+	
+	ShowCursor(false);
 }

@@ -26,7 +26,7 @@ class Patch {
 	*/
 
 	public:
-		//Patch::Patch();
+		Patch::Patch();
 		Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4);
 		Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color);
 		Patch::Patch(Vector3f vec1, Vector3f vec2, Vector3f vec3, Vector3f vec4, Vector3f color, Vector3f illumination);
@@ -46,6 +46,7 @@ class Patch {
 		Vector3f radiosity;	// radiozita - energie vyzarena z povrchu
 		Vector3f illumination;	// osvetlenost plosky (zde se scitaji svetla ktera dopadla na plosku)
 
+		unsigned int relativeNeighbours[8]; // relativni odkazy na sousedici patche, cislovano v ramci sceny; pouziva se pouze pri ulozeni jako nahrada ukazatelu
 		Patch* neighbours[8]; // ukazatele na sousedici patche - plni se az pri skladani sceny; cislovano z leveho horniho rohu; pokud soused neni, ukazuje na sebe
 
 	protected:
