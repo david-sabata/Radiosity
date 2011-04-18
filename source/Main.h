@@ -24,11 +24,16 @@
 #include "LoadingModel.h"
 #include "Kernel_ProcessHemicube.h"
 
+#ifdef _DEBUG
+#include <vld.h>
+#endif
+
+
 using namespace std;
 
 
 // parametr pro subdivision
-#define MAX_PATCH_AREA 0.1
+#define MAX_PATCH_AREA 0.5
 
 
 // rozmery hemicube, resp. pohledove textury jsou v FormFactors.h

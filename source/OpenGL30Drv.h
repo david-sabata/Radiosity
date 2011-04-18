@@ -180,7 +180,12 @@ public:
 	/**
 	 *  @brief GL context getter
 	 */
-	HGLRC GetContext();
+	HGLRC GetContext() const;
+
+	/**
+	 *	@brief GL device getter
+	 */
+	HDC GetDevice() const;
 };
 
 #endif //__GL30_DRIVER_INCLUDED

@@ -1,4 +1,5 @@
 #pragma warning(disable:4996)
+
 #include "Main.h"
 
 
@@ -313,6 +314,7 @@ bool InitCLObjects() {
 	// Context - vytvoreny z OpenGL contextu
 	cl_context_properties props[] = {
 		CL_GL_CONTEXT_KHR, (cl_context_properties)driver.GetContext(),
+		CL_WGL_HDC_KHR, (cl_context_properties)driver.GetDevice(),
 		0
 	};
 	ocl_context = clCreateContext(props, 1, &ocl_device, NULL, NULL, &error);
@@ -655,7 +657,7 @@ int main(int n_arg_num, const char **p_arg_list)
 	// nacteme globalni objekt sceny a nastavime limit velikosti patchu
 	scene.load();	
 	scene.maxPatchArea = MAX_PATCH_AREA;
-
+	
 	// vyrobime objekty OpenGL, nutne ke kresleni
 	if(!InitGLObjects()) {
 		cerr << "error: failed to initialize OpenGL objects" << endl; // neco se nepovedlo (chyba pri kompilaci shaderu / chyba pri nacitani obrazku textury)
@@ -670,7 +672,7 @@ int main(int n_arg_num, const char **p_arg_list)
 
 	// skryt kurzor mysi
 	ShowCursor(false);
-
+	
 	// smycka zprav, s funkci OnIdle()
 	MSG t_msg;
 	while(b_running) {
@@ -711,13 +713,13 @@ int main(int n_arg_num, const char **p_arg_list)
 		}
 	}
 	
-
+	
 	// uvolnime OpenGL objekty
 	CleanupGLObjects();	
 
 	// uvolnime OpenCL objekty
 	CleanupCLObjects();
-
+	
 	// znovu zobrazit kurzor mysi
 	ShowCursor(true);
 
@@ -1103,7 +1105,7 @@ void OnIdle(CGL30Driver &driver)
 					Patch* p = scenePatches[i];
 			
 					uint32_t newData[4];
-					smoothShadePatch(newData, p);
+					Colors::smoothShadePatch(newData, p);
 
 					if (buffer != NULL)
 						memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
@@ -1236,47 +1238,6 @@ void OnIdle(CGL30Driver &driver)
 
 
 
-/**
- * @brief Vypocita nove barvy vrcholu patche ze znalosti jeho sousedu
- * @param[out] pole 4 barev (uint32_t) pro jednotlive rohy
- * @param[in] patch se kterym se pracuje
- */
-void smoothShadePatch(uint32_t* colors, Patch* p) {
-
-	// levy horni vrchol
-	Vector3f color_lt = p->getColor() * p->illumination;
-	color_lt += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;	
-	color_lt += p->neighbours[0]->getColor() * p->neighbours[0]->illumination;
-	color_lt += p->neighbours[1]->getColor() * p->neighbours[1]->illumination;
-	color_lt = color_lt / 4;
-	
-	// pravy horni vrchol
-	Vector3f color_rt = p->getColor() * p->illumination;
-	color_rt += p->neighbours[1]->getColor() * p->neighbours[1]->illumination;
-	color_rt += p->neighbours[2]->getColor() * p->neighbours[2]->illumination;
-	color_rt += p->neighbours[3]->getColor() * p->neighbours[3]->illumination;
-	color_rt = color_rt / 4;
-
-	// pravy dolni vrchol
-	Vector3f color_rb = p->getColor() * p->illumination;
-	color_rb += p->neighbours[3]->getColor() * p->neighbours[3]->illumination;
-	color_rb += p->neighbours[4]->getColor() * p->neighbours[4]->illumination;
-	color_rb += p->neighbours[5]->getColor() * p->neighbours[5]->illumination;
-	color_rb = color_rb / 4;
-
-	// levy dolni vrchol
-	Vector3f color_lb = p->getColor() * p->illumination;
-	color_lb += p->neighbours[5]->getColor() * p->neighbours[5]->illumination;
-	color_lb += p->neighbours[6]->getColor() * p->neighbours[6]->illumination;
-	color_lb += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;
-	color_lb = color_lb / 4;
-	
-	
-	colors[0] = Colors::packColor(color_lb);
-	colors[1] = Colors::packColor(color_rb);
-	colors[2] = Colors::packColor(color_rt);
-	colors[3] = Colors::packColor(color_lt);	
-}
 
 /**
  * Otevre dialog na vyber souboru odkud se nactou obsahy bufferu
@@ -1356,7 +1317,7 @@ void LoadFromFile() {
 					Patch* p = scenePatches[i];
 			
 					uint32_t newData[4];
-					smoothShadePatch(newData, p);
+					Colors::smoothShadePatch(newData, p);
 
 					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 				}		

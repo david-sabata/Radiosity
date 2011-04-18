@@ -186,3 +186,48 @@ unsigned int* Colors::getRevMasks() {
 short* Colors::getShifts() {
 	return shift;
 }
+
+
+
+
+/**
+ * @brief Vypocita nove barvy vrcholu patche ze znalosti jeho sousedu
+ * @param[out] pole 4 barev (uint32_t) pro jednotlive rohy
+ * @param[in] patch se kterym se pracuje
+ */
+void Colors::smoothShadePatch(uint32_t* colors, Patch* p) {
+
+	// levy horni vrchol
+	Vector3f color_lt = p->getColor() * p->illumination;
+	color_lt += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;	
+	color_lt += p->neighbours[0]->getColor() * p->neighbours[0]->illumination;
+	color_lt += p->neighbours[1]->getColor() * p->neighbours[1]->illumination;
+	color_lt = color_lt / 4;
+	
+	// pravy horni vrchol
+	Vector3f color_rt = p->getColor() * p->illumination;
+	color_rt += p->neighbours[1]->getColor() * p->neighbours[1]->illumination;
+	color_rt += p->neighbours[2]->getColor() * p->neighbours[2]->illumination;
+	color_rt += p->neighbours[3]->getColor() * p->neighbours[3]->illumination;
+	color_rt = color_rt / 4;
+
+	// pravy dolni vrchol
+	Vector3f color_rb = p->getColor() * p->illumination;
+	color_rb += p->neighbours[3]->getColor() * p->neighbours[3]->illumination;
+	color_rb += p->neighbours[4]->getColor() * p->neighbours[4]->illumination;
+	color_rb += p->neighbours[5]->getColor() * p->neighbours[5]->illumination;
+	color_rb = color_rb / 4;
+
+	// levy dolni vrchol
+	Vector3f color_lb = p->getColor() * p->illumination;
+	color_lb += p->neighbours[5]->getColor() * p->neighbours[5]->illumination;
+	color_lb += p->neighbours[6]->getColor() * p->neighbours[6]->illumination;
+	color_lb += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;
+	color_lb = color_lb / 4;
+	
+	
+	colors[0] = Colors::packColor(color_lb);
+	colors[1] = Colors::packColor(color_rb);
+	colors[2] = Colors::packColor(color_rt);
+	colors[3] = Colors::packColor(color_lt);	
+}

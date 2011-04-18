@@ -49,7 +49,12 @@ void Model::subdivide(double area) {
 			patches->insert(patches->end(), p_new_patches->begin(), p_new_patches->end());
 		}
 
+		delete p_new_patches;
 	}
 
+	// uvolnit puvodni patche
+	for (vector<Patch*>::iterator it = patches->begin(); it != patches->begin() + n_original_size; it++) {
+		delete (*it);
+	}
 	patches->erase(patches->begin(), patches->begin() + n_original_size);
 }

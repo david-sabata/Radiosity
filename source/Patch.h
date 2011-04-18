@@ -47,7 +47,7 @@ class Patch {
 		Vector3f illumination;	// osvetlenost plosky (zde se scitaji svetla ktera dopadla na plosku)
 
 		unsigned int relativeNeighbours[8]; // relativni odkazy na sousedici patche, cislovano v ramci sceny; pouziva se pouze pri ulozeni jako nahrada ukazatelu
-		Patch* neighbours[8]; // ukazatele na sousedici patche - plni se az pri skladani sceny; cislovano z leveho horniho rohu; pokud soused neni, ukazuje na sebe
+		Patch* neighbours[8]; // ukazatele na sousedici patche - plni se az pri skladani sceny; cislovano z leveho horniho rohu; pokud soused neni, ukazuje na sebe		
 
 	protected:
 		Vector3f vec1, vec2, vec3, vec4;

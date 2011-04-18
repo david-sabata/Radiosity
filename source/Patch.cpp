@@ -289,3 +289,4 @@ float Patch::getReflectivity() {
 	return REFLECTIVITY;
 	//return reflectivity;
 }
+

@@ -2,7 +2,6 @@
 #include "ModelContainer.h"
 
 
-
 ModelContainer::ModelContainer(void) {
 	vertices = NULL;
 	indices = NULL;
