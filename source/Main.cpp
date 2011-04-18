@@ -1065,7 +1065,7 @@ void OnIdle(CGL30Driver &driver)
 				for (unsigned int i = 0; i < n_last_index; i++) {			
 
 					if (p_pids[i] >= scenePatchesCount) {
-						cerr << "! warning !\t uknown patch id: " << p_pids[i] << endl;
+						cerr << "Uknown patch id: " << p_pids[i] << "! Is there a problem with video card?" << endl;
 						continue;
 					}
 
@@ -1094,26 +1094,37 @@ void OnIdle(CGL30Driver &driver)
 			if (emitter->illumination.z > 1.0)
 				emitter->illumination.z = 1.0;
 		
-			// nabindovat buffer s barvami patchu
-			glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+			// nabindovat buffer s barvami patchu a updatovat jej
+			{				
+				glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+				uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY); // mapovani obou VBO prida cca 5 FPS
 
-			// vypocitat nove barvy patchu, ktere se budou zobrazovat
-			for (unsigned int i = 0; i < scenePatchesCount; i++) {
-				Patch* p = scenePatches[i];
+				for (unsigned int i = 0; i < scenePatchesCount; i++) {
+					Patch* p = scenePatches[i];
 			
-				uint32_t newData[4];
-				smoothShadePatch(newData, p);
+					uint32_t newData[4];
+					smoothShadePatch(newData, p);
 
-				glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-			}
+					if (buffer != NULL)
+						memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+					else
+						glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+				}
 		
-			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
+				if (buffer != NULL) {
+					if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
+						cerr << "Error unmapping VBO" << endl;
+				}
+
+				glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
+			}
 		
 
 			// nabindovat VBO s radiativnimi energiemi a updatovat jej
-			glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
-			uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-			if (buffer != NULL) { // TODO: better!
+			{
+				glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
+				uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);		
+
 				for (unsigned int i=0; i < scenePatchesCount; i++) {				
 					uint32_t newColor = Colors::packColor(scenePatches[i]->radiosity);
 					uint32_t newData[4] = {
@@ -1123,16 +1134,19 @@ void OnIdle(CGL30Driver &driver)
 						newColor
 					};
 
-					memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+					if (buffer != NULL)
+						memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+					else
+						glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
 				}
 
-				if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
-					cerr << "Chyba pri uvolneni mapovani VBO" << endl;
-			} else
-				cerr << "Chyba pri mapovani VBO" << endl;
-
-			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer		
-
+				if (buffer != NULL) {
+					if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
+						cerr << "Error unmapping VBO" << endl;
+				}
+			
+				glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer		
+			}
 
 			// zbyvajici energie ve scene
 			float total = 0;
