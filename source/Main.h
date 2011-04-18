@@ -86,14 +86,13 @@ static GLuint	n_preview_program_object,
 static float*	p_formfactors = NULL;
 
 
+
 // CL objekty
 static cl_platform_id ocl_platform;
 static cl_kernel ocl_kernel;
 static cl_context ocl_context;
 static cl_command_queue ocl_queue;
 static cl_device_id ocl_device;
-static uint32_t* ocl_data_patchids; // !!!
-static float* ocl_data_formfactors; // !!!
 
 // CL argumenty programu
 cl_mem	ocl_arg_ids, 
@@ -101,6 +100,7 @@ cl_mem	ocl_arg_ids,
 		ocl_arg_writeindex, 
 		ocl_arg_patchview, 
 		ocl_arg_ffactors;
+
 
 
 // citlivosti / rychlosti pohybu
@@ -113,10 +113,15 @@ static bool b_mouse_controlled = false;
 // aliasy pro virtual-keys
 #define KEY_A 0x41
 #define KEY_D 0x44
+#define KEY_F 0x46
 #define KEY_L 0x4C
+#define KEY_O 0x4F
 #define KEY_P 0x50
+#define KEY_Q 0x51
 #define KEY_S 0x53
 #define KEY_W 0x57
+#define KEY_TAB 0x09
+
 
 
 // objekty kamery
@@ -130,10 +135,11 @@ ModelContainer scene;
 CGLFrameBufferObject* fbo = NULL;
 
 
+
 // pocitadlo pruchodu - kolikrat probehla distribuce energie 
 unsigned int passCounter = 0;
 
-// priznak pro ne/vypisovani informaci pri distribuci energie (E) // !!! I
+// priznak pro ne/vypisovani informaci pri distribuci energie (O)
 bool debugOutput = false;
 
 // kreslit radiativni energie namisto iluminativnich? (TAB)
@@ -174,13 +180,14 @@ static double f_frame_time_average = 0;
 #define p_OffsetInVBO(off) ((void*)(off))
 
 
+// prototypy funkci
 void OnIdle(CGL30Driver &driver);
 void onResize(int n_x, int n_y, int n_new_width, int n_new_height);
 LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_param);
 void smoothShadePatch(uint32_t* colors, Patch* p);
 void SaveToFile();
 void LoadFromFile();
-// prototypy funkci
+
 
 
 
