@@ -2,6 +2,7 @@
 #include "ModelContainer.h"
 
 
+
 ModelContainer::ModelContainer(void) {
 	vertices = NULL;
 	indices = NULL;
@@ -78,10 +79,7 @@ void ModelContainer::removeModel(int i) {
 /**
  * Naplni vnitrni promenne pro pocty a pole vrcholu/indexu aktualnimi hodnotami
  */
-void ModelContainer::updateData() {
-	
-	CTimer timer;
-	timer.ResetTimer();
+void ModelContainer::updateData() {	
 
 	// seskladat data z jednotlivych modelu do jedineho (pomocneho) vektoru
 	vector<float>* tmpVertices = new vector<float>();
@@ -95,13 +93,8 @@ void ModelContainer::updateData() {
 
 	int offset = 0; // pocet jiz vlozenych floatu - pro spravne provazani indexu a vrcholu
 
-	cout << "po initu " << timer.f_Time() << endl;
-
-	for (vector<Model*>::iterator it = models.begin(); it != models.end(); it++) {
-		
-		float x = timer.f_Time();
+	for (vector<Model*>::iterator it = models.begin(); it != models.end(); it++) {		
 		vector<Patch*>* patches = (*it)->getPatches( maxPatchArea );
-		cout << "get patches " << (timer.f_Time() - x) << endl;
 
 		int ptchCnt = patches->size();
 		patchesCount += ptchCnt;
@@ -129,9 +122,7 @@ void ModelContainer::updateData() {
 
 			offset += 4;
 		}		
-	}
-		
-	cout << "po naplneni " << timer.f_Time() << endl;
+	}		
 
 	// obnovit pole vrcholu, indexu a patchu
 	if (vertices != NULL)
@@ -150,19 +141,12 @@ void ModelContainer::updateData() {
 	copy(tmpVertices->begin(), tmpVertices->end(), vertices);
 	copy(tmpIndices->begin(), tmpIndices->end(), indices);
 	copy(tmpPatches->begin(), tmpPatches->end(), patches);
-
-	cout << "po kopirovani " << timer.f_Time() << endl;
-
-	//printf("scene vertices: %i\n scene indices: %i\n", verticesCount/3, indicesCount);
-	printf("scene patches: %i\n", patchesCount);
 	
 	delete tmpVertices;
 	delete tmpIndices;
 	delete tmpPatches;
 
 	needRefresh = false;
-
-	cout << "hotovo " << timer.f_Time() << endl;
 }
 
 
