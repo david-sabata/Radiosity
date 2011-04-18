@@ -106,6 +106,14 @@ cl_mem	ocl_arg_ids,
 		ocl_arg_patchview, 
 		ocl_arg_ffactors;
 
+// pocet instanci programu		
+const unsigned int ocl_local_work_size[] = { OCL_WORKITEMS_X, 8 };
+unsigned int ocl_global_work_size[] = { OCL_WORKITEMS_X, OCL_WORKITEMS_Y };
+
+// prostor pro data ktera lezou z kernelu; dynamicky se alokuji v InitCLObjects
+uint32_t* p_ocl_pids = NULL;
+float* p_ocl_energies = NULL;
+
 
 
 // citlivosti / rychlosti pohybu
@@ -175,6 +183,41 @@ static vector<interval> patchIntervals;
 // pro mereni fps
 static CTimer timer;
 static double f_frame_time_average = 0;
+
+// pro mereni doby celeho procesu distribuce energie
+static CTimer totalTimer;
+
+
+
+// 'okna' do kterych se budou kreslit jednotlive pohledy; odpovida 'nakresu' v FormFactors.cpp
+// x, y, w, h		(0,0 = levy dolni roh)
+int p_viewport_list[][4] = {
+	{	0,						HEMICUBE_H,		HEMICUBE_W,	HEMICUBE_H	},
+	{	HEMICUBE_W,				HEMICUBE_H/2,	HEMICUBE_W,	HEMICUBE_H	},
+	{	-1*int(HEMICUBE_W/2),	0,				HEMICUBE_W,	HEMICUBE_H	},
+	{	int(HEMICUBE_W*1.5),	0,				HEMICUBE_W,	HEMICUBE_H	},
+	{	HEMICUBE_W/2,			0,				HEMICUBE_W, HEMICUBE_H	}
+};
+
+// oblasti v texture, do kterych je povoleno kreslit;
+// jelikoz se nektere casti kresli pres sebe, muze pri kresleni 'pruhledna' vznikat
+// nezadouci zviditelneni drive vykreslene casti pohledu, ktery ale ma byt skryty, coz resi glScissor
+// 
+// x, y, w, h
+int p_scissors_list[][4] = {
+	{	0,						HEMICUBE_H,		HEMICUBE_W,		HEMICUBE_H/2	},
+	{	HEMICUBE_W,				HEMICUBE_H,		HEMICUBE_W,		HEMICUBE_H/2	},
+	{	0,						0,				HEMICUBE_W/2,	HEMICUBE_H		},
+	{	int(HEMICUBE_W*1.5),	0,				HEMICUBE_W/2,	HEMICUBE_H		},
+	{	HEMICUBE_W/2,			0,				HEMICUBE_W,		HEMICUBE_H		}
+};
+
+// smery pohledu pro jednotlive casti textury
+Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,
+	Camera::PATCH_LOOK_LEFT, Camera::PATCH_LOOK_RIGHT, Camera::PATCH_LOOK_FRONT};			
+
+
+
 
 
 
