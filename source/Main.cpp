@@ -20,11 +20,12 @@
 #include "Timer.h"
 #include "FormFactors.h"
 #include "LoadingModel.h"
+#include "Kernel_ProcessHemicube.h"
 
 using namespace std;
 
 // parametr pro subdivision
-#define MAX_PATCH_AREA 0.5
+#define MAX_PATCH_AREA 0.1
 
 const unsigned int OCL_WORKITEMS_X = 8;
 const unsigned int OCL_WORKITEMS_Y = PATCHVIEW_TEX_H;
@@ -159,34 +160,6 @@ static double f_frame_time_average = 0;
 
 
 /**
- *	@brief vyrobi OpenGL texturu z bitmapy
- *	@param[in] p_bitmap je obrazek textury
- *	@param[in] n_internal_format je pozadovany format ulozeni textury na graficke karte (format obrazku je v typu TBmp vzdy GL_RGBA)
- *	@return vraci id textury (neuvazuje neuspech)
- */
-GLuint n_GLTextureFromBitmap(const TBmp *p_bitmap, GLenum n_internal_format = GL_RGBA8)
-{
-	GLuint n_tex;
-	glGenTextures(1, &n_tex);
-	glBindTexture(GL_TEXTURE_2D, n_tex);
-	//glEnable(GL_TEXTURE_2D); !! OpenGL 3 uz nema enable / disable textur, shader si sam cte textury ktere potrebuje !!
-	// vyrobi a nastavi novou 2D texturu, zatim nema zadne data
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	// nastavime filtrovani
-
-	glTexImage2D(GL_TEXTURE_2D, 0, n_internal_format, p_bitmap->n_width, p_bitmap->n_height,
-		0, GL_RGBA, GL_UNSIGNED_BYTE, p_bitmap->p_buffer);
-	// specifikujeme data textury
-
-	glGenerateMipmap(GL_TEXTURE_2D);
-	// nechame OpenGL spocitat jeji mipmapy
-
-	return n_tex;
-}
-
-/**
  *	@brief vraci "pointer" do VBO
  *	@param[in] off je offset v bytech, na ktery ma vraceny pointer ukazovat
  */
@@ -197,7 +170,7 @@ GLuint n_GLTextureFromBitmap(const TBmp *p_bitmap, GLenum n_internal_format = GL
  *	@return vraci true pri uspechu, false pri neuspechu
  */
 bool InitGLObjects() {		
-	//glEnable(GL_CULL_FACE); // not such a good idea
+	glEnable(GL_CULL_FACE);
 
 	// vyrobime buffer objekt, do ktereho zkopirujeme geometrii naseho modelu 
 	// (do jednoho bufferu ulozime vsechny souradnice, tzn. texturovaci / normaly / barvy / pozice, atp. 
@@ -534,23 +507,9 @@ bool InitCLObjects() {
 	ocl_arg_ffactors = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES*sizeof(float), NULL, &error);
 
 	_ASSERT(error == CL_SUCCESS);
-
-	// nacist zdrojovy kod kernelu
-	FILE* fp = fopen("ProcessHemicube.cl", "rb");
-	if (fp == NULL) {
-		cerr << "error: can't open OpenCL source file" << endl;
-		return false;
-	}
-	fseek(fp, 0, SEEK_END);
-	size_t filesize = ftell(fp);
-	rewind(fp);
 	
-	char* source = new char[filesize];
-	if (fread(source, sizeof(char), filesize, fp) != filesize) {
-		cerr << "error: can't read OpenCL source file" << endl;
-		return false;
-	}
-	fclose(fp);	
+	// nacist zdrojovy kod kernelu z Kernel_ProcessHemicube.h
+	const char* source = kernel_processHemicube;
 	
 	// pridat makro na rozbaleni UINT_2_10_10_10_REV do indexu barvy (Colors::index)
 	// pres parametr pri kompilaci to nejak nefunguje
@@ -560,9 +519,10 @@ bool InitCLObjects() {
 	opts << "#define unpack(c) ( (((c) & " << rMasks[0] << ") >> " << shifts[0] << ") | (((c) & " << rMasks[1] << ") >> " << shifts[1] << ") | (((c) & " << rMasks[2] << ") >> " << shifts[2] << ") )" << endl;	
 	opts << "#define correction " << Colors::getCorrection() << endl;
 	
-	string src = opts.str() + string(source, filesize);
+	string src = opts.str() + string(source);
 	const char* sourceStr = src.c_str();
 	size_t sourceSize = src.size();
+
 
 	// vytvorit program
 	cl_program ocl_program = clCreateProgramWithSource(
@@ -627,8 +587,7 @@ bool InitCLObjects() {
 		delete[] build_log;
 
 		return false;
-	}
-	delete[] source;
+	}	
 	
 
 	// ziskat vstupni bod programu (kernel)
@@ -1616,9 +1575,9 @@ void LoadFromFile() {
 			
 
 			// rekonstruovat scenu ------------------------
-			if (!error) {
-				// uvolnit GL objekty
+			if (!error) {				
 				CleanupGLObjects();
+				CleanupCLObjects();
 
 				// zresetovat staticke objekty
 				patchIntervals.clear();
@@ -1632,7 +1591,7 @@ void LoadFromFile() {
 				scene.addModel(dummy);
 
 				// znovu inicializovat GL, naplnit buffery, ...
-				if (!InitGLObjects())
+				if (!InitGLObjects() || !InitCLObjects())
 					error = true;
 
 				delete[] data;
