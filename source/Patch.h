@@ -55,3 +55,18 @@ class Patch {
 		//float reflectivity;	// odrazivost plosky - pro vypocet kolik energie se pohlti/odrazi				
 };
 
+
+/**
+ * Vraci odrazivost povrchu
+ */
+inline float Patch::getReflectivity() {
+	return REFLECTIVITY;
+	//return reflectivity;
+}
+
+/**
+ * Vraci vlastni barvu patche
+ */
+inline Vector3f Patch::getColor() {
+	return color;
+}

@@ -287,7 +287,11 @@ bool InitGLObjects() {
 	// predpocitat form factory
 	p_formfactors = precomputeHemicubeFormFactors();
 
-	
+	// alokovat misto pro vystup formfactoru z kernelu
+	p_tmp_formfactors = new float[patchCount];
+	for (int i = 0; i < patchCount; i++)
+		p_tmp_formfactors[i] = 0;
+
 	return true;
 }
 
@@ -492,7 +496,8 @@ bool InitCLObjects() {
 void CleanupGLObjects()
 {
 	delete[] n_color_array_object;
-	// smaze dynamicky alokovane pole vao
+	delete[] p_tmp_formfactors;
+	// smaze dynamicky alokovane objekty
 
 	glDeleteBuffers(1, &n_vertex_buffer_object);
 	glDeleteBuffers(1, &n_index_buffer_object);
@@ -944,69 +949,64 @@ void OnIdle(CGL30Driver &driver)
 	// ***********************************************************************************
 
 	// v pripade, ze scena neni nactena, nesnazit se renderovat do textury
-	// ani pocitat radiozitu    (podminka by mela by vzdy splnena)
-	if (scenePatchesCount > 0) {
+	// ani pocitat radiozitu
+	if (computeRadiosity && scenePatchesCount > 0) {
 
-		// najit patch s nejvetsi energii
-		unsigned int patchId = scene.getHighestRadiosityPatchId();
-		Patch* emitter = scenePatches[patchId];
+		// pouzije shader pro pohled z patche a bude kreslit do framebuffer objectu
+		glUseProgram(n_patch_program_object);
+		fbo->Bind();
+		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
+		glViewport(0, 0, fbo->n_Width(), fbo->n_Height());		
 
-		// pro kazdy interval patchu ve scene
-		for (unsigned int interval = 0; interval < patchIntervals.size(); interval++) {
+		for (int shoot = 0; shoot < 100 && computeRadiosity; shoot++) { 
 
-			// pouzije shader pro pohled z patche
-			glUseProgram(n_patch_program_object);
+			// najit patch s nejvetsi energii
+			unsigned int patchId = scene.getHighestRadiosityPatchId();
+			Patch* emitter = scenePatches[patchId];
 
-			fbo->Bind();
-			fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
-
-			// nastavit parametry oblasti viewportu
-			glViewport(0, 0, fbo->n_Width(), fbo->n_Height());
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 			
-			glEnable(GL_SCISSOR_TEST);
-
-			// celkem 5 pohledu
-			for(int i=0; i < 5; i++) {
+			// pro kazdy interval patchu ve scene
+			for (unsigned int interval = 0; interval < patchIntervals.size(); interval++) {
 				
-				Camera::PatchLook dir = p_patchlook_perm[i];
+				// vycistit fbo
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 			
+				glEnable(GL_SCISSOR_TEST);
 
-				// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
-				{
-					// matice perspektivni projekce
-					Matrix4f t_projection;
-					CGLTransform::Perspective(t_projection, 90, 1.0f, 0.01f, 1000);		 // ratio 1.0!
+				// celkem 5 pohledu
+				for(int i=0; i < 5; i++) {
+				
+					Camera::PatchLook dir = p_patchlook_perm[i];
+
+					// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
+					{
+						// matice perspektivni projekce
+						Matrix4f t_projection;
+						CGLTransform::Perspective(t_projection, 90, 1.0f, 0.01f, 1000);		 // ratio 1.0!
 		
-					// modelview
-					Matrix4f t_modelview;
-					t_modelview.Identity();				
+						// modelview
+						Matrix4f t_modelview;
+						t_modelview.Identity();				
 
-					// vynasobit pohledem kamery patche
-					patchCam.lookFromPatch(scenePatches[patchId], dir);
-					t_modelview *= patchCam.GetMatrix();
+						// vynasobit pohledem kamery patche
+						patchCam.lookFromPatch(scenePatches[patchId], dir);
+						t_modelview *= patchCam.GetMatrix();
 
-					// matice pohledu kamery
-					t_mvp = t_projection * t_modelview;
+						// matice pohledu kamery
+						t_mvp = t_projection * t_modelview;
+					}
+
+					// nahrajeme matici do OpenGL jako parametr shaderu
+					glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
+
+					// nastavit parametry viewportu a oblast, do ktere je povoleno kreslit
+					glScissor(p_scissors_list[i][0], p_scissors_list[i][1], p_scissors_list[i][2], p_scissors_list[i][3]);
+					glViewport(p_viewport_list[i][0], p_viewport_list[i][1], p_viewport_list[i][2], p_viewport_list[i][3]);
+		
+					// vykreslit do textury (pres FBO)
+					DrawPatchLook(interval);
 				}
 
-				// nahrajeme matici do OpenGL jako parametr shaderu
-				glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
-
-				// nastavit parametry viewportu a oblast, do ktere je povoleno kreslit
-				glScissor(p_scissors_list[i][0], p_scissors_list[i][1], p_scissors_list[i][2], p_scissors_list[i][3]);
-				glViewport(p_viewport_list[i][0], p_viewport_list[i][1], p_viewport_list[i][2], p_viewport_list[i][3]);
-		
-				// vykreslit do textury (pres FBO)
-				DrawPatchLook(interval);
-			}
-
-			glDisable(GL_SCISSOR_TEST);
-
-			fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
-			fbo->Release();
+				glDisable(GL_SCISSOR_TEST);
 	
-
-			// zpracovat vyrenderovanou texturu? v pripade ze se rad. nepocita, pouzije se pouze pro nahledovy kriz
-			if (computeRadiosity) {	
 				// priznak chyby pri praci s OCL
 				cl_int error = 0;			
 
@@ -1040,7 +1040,7 @@ void OnIdle(CGL30Driver &driver)
 				error |= clEnqueueReleaseGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
 				_ASSERT(error == CL_SUCCESS);				
 
-				// prenest energie
+				// secist formfactory do p_tmp_formfactors
 				for (unsigned int i = 0; i < n_last_index; i++) {			
 
 					if (p_ocl_pids[i] >= scenePatchesCount) {
@@ -1048,17 +1048,22 @@ void OnIdle(CGL30Driver &driver)
 						continue;
 					}
 
-					Patch* p = scenePatches[p_ocl_pids[i]];			
-					p->radiosity += emitter->radiosity * p_ocl_energies[i] * p->getReflectivity() * emitter->getColor(); // slow?
+					//Patch* p = scenePatches[p_ocl_pids[i]];
+					//p->radiosity = p->radiosity + emitter->radiosity * p_ocl_energies[i] * p->getReflectivity() * emitter->getColor();
+					p_tmp_formfactors[p_ocl_pids[i]] += p_ocl_energies[i];
 				}
 
-			} // if computeRadiosity
-		} // for each interval
+				// prenest energie
+				for (unsigned int i = 0; i < scenePatchesCount; i++) {
+					Patch* p = scenePatches[i];
+					p->radiosity += emitter->radiosity * p_tmp_formfactors[i] * p->getReflectivity() * emitter->getColor();
+				}
+				
+				// vyprazdnit pole pro dalsi pruchod
+				fill_n(p_tmp_formfactors, scenePatchesCount, 0);
+			} // for each interval
 
 
-		// aktualizovat buffery
-		if (computeRadiosity) {
-			
 			// zdroj se vyzaril
 			Vector3f lastEnergy = emitter->radiosity; // zapamatovat si hodnotu
 			emitter->illumination += emitter->radiosity;
@@ -1074,70 +1079,74 @@ void OnIdle(CGL30Driver &driver)
 
 			// ukoncit, jakmile energie nejnabitejsiho patche ve scene klesne pod danou hranici
 			if (lastEnergy.f_Length2() < 0.001) {
-				cout << "Done in " << totalTimer.f_Time() << " seconds" << endl;
-
-				// nabindovat buffer s barvami patchu a updatovat jej
-				{				
-					glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
-					uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY); // mapovani obou VBO prida cca 5 FPS
-
-					for (unsigned int i = 0; i < scenePatchesCount; i++) {
-						Patch* p = scenePatches[i];
-			
-						uint32_t newData[4];
-						Colors::smoothShadePatch(newData, p);
-
-						if (buffer != NULL)
-							memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
-						else
-							glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-					}
-		
-					if (buffer != NULL) {
-						if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
-							cerr << "Error unmapping VBO" << endl;
-					}
-
-					glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
-				}
-		
-
-				// nabindovat VBO s radiativnimi energiemi a updatovat jej
-				{
-					glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
-					uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);		
-
-					for (unsigned int i=0; i < scenePatchesCount; i++) {				
-						uint32_t newColor = Colors::packColor(scenePatches[i]->radiosity);
-						uint32_t newData[4] = {
-							newColor,
-							newColor,
-							newColor,
-							newColor
-						};
-
-						if (buffer != NULL)
-							memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
-						else
-							glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
-					}
-
-					if (buffer != NULL) {
-						if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
-							cerr << "Error unmapping VBO" << endl;
-					}
-			
-					glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer		
-				}
-
-
+				cout << "Done in " << totalTimer.f_Time() << " seconds" << endl;				
 				computeRadiosity = false; 
 			} else if (debugOutput) {
 				cout << "Pass " << passCounter << ", the emitter had " << setprecision(10) << lastEnergy.f_Length2() << " energy" << endl;
+			}			
+
+			passCounter++;			
+
+		} // for 'shoot' times
+
+		// uvolnit fbo
+		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
+		fbo->Release();
+				
+		// nabindovat buffer s barvami patchu a updatovat jej
+		{				
+			glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
+			uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY); // mapovani obou VBO prida cca 5 FPS
+
+			for (unsigned int i = 0; i < scenePatchesCount; i++) {
+				Patch* p = scenePatches[i];
+
+				uint32_t newData[4];
+				Colors::smoothShadePatch(newData, p);
+
+				if (buffer != NULL)
+					memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+				else
+					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+			}
+		
+			if (buffer != NULL) {
+				if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
+					cerr << "Error unmapping VBO" << endl;
 			}
 
-			passCounter++;
+			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		}
+		
+		/* pro zobrazovani radiativnich energii
+		// nabindovat VBO s radiativnimi energiemi a updatovat jej
+		{
+			glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
+			uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);		
+
+			for (unsigned int i=0; i < scenePatchesCount; i++) {				
+				uint32_t newColor = Colors::packColor(scenePatches[i]->radiosity);
+				uint32_t newData[4] = {
+					newColor,
+					newColor,
+					newColor,
+					newColor
+				};
+
+				if (buffer != NULL)
+					memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+				else
+					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+			}
+
+			if (buffer != NULL) {
+				if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
+					cerr << "Error unmapping VBO" << endl;
+			}
+			
+			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer		
+		}
+		*/
 
 	} // if scenePatchesCount > 0
 

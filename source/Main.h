@@ -114,6 +114,9 @@ unsigned int ocl_global_work_size[] = { OCL_WORKITEMS_X, OCL_WORKITEMS_Y };
 uint32_t* p_ocl_pids = NULL;
 float* p_ocl_energies = NULL;
 
+// pole souctu formfactoru pro kazdy patch ve scene, pouziva se pro zpracovani vystupu kernelu; indexovano ID patche
+static float* p_tmp_formfactors = NULL;
+
 
 
 // citlivosti / rychlosti pohybu

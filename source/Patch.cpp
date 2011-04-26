@@ -274,19 +274,3 @@ Vector3f Patch::getNormal() {
 	Vector3f B = vec4 - vec1;
 	return A.Cross(B);
 }
-
-/**
- * Vraci vlastni barvu patche
- */
-Vector3f Patch::getColor() {
-	return color;
-}
-
-/**
- * Vraci odrazivost povrchu
- */
-float Patch::getReflectivity() {
-	return REFLECTIVITY;
-	//return reflectivity;
-}
-
