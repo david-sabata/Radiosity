@@ -39,7 +39,7 @@ void Config::freeze() {
 
 	_MAX_PATCH_AREA = maxPatchArea;
 
-	_OCL_WORKITEMS_X = oclWorkitemsX;
+	_OCL_WORKITEMS_X = min(oclWorkitemsX, _PATCHVIEW_TEX_W);
 	_OCL_WORKITEMS_Y = _PATCHVIEW_TEX_H;
 	_OCL_SPANLENGTH = _PATCHVIEW_TEX_W / _OCL_WORKITEMS_X;
 

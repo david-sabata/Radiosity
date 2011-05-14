@@ -719,9 +719,23 @@ void DrawPatchLookPreview() {
  */
 int main(int n_arg_num, const char **p_arg_list)
 {
+	if ((n_arg_num-1) % 2 > 0) {
+		cerr << "Spatny pocet parametru!" << endl;
+		return -1;
+	}
+
 	// parsovani parametru
-
-
+	for (int i = 1; i < n_arg_num; i += 2) {
+		if (strcmp(p_arg_list[i], "area") == 0) {
+			Config::setMaxPatchArea( atof(p_arg_list[i+1]) );
+		}
+		if (strcmp(p_arg_list[i], "hemicube") == 0) {
+			Config::setHemicubeSide( atoi(p_arg_list[i+1]) );
+		}
+		if (strcmp(p_arg_list[i], "shoots") == 0) {
+			Config::setShootsPerCycle( atoi(p_arg_list[i+1]) );
+		}
+	}
 
 	// parametry zname, muzeme zmrazit config a nechat jej dopocitat ostatni hodnoty
 	Config::freeze();
