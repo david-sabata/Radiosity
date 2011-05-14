@@ -264,14 +264,14 @@ bool InitGLObjects() {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, PATCHVIEW_TEX_W, PATCHVIEW_TEX_H, 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Config::PATCHVIEW_TEX_W(), Config::PATCHVIEW_TEX_H(), 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 
 
 	// vytvorit FBO pro kresleni pohledu z patchu do textury
 	fbo = new CGLFrameBufferObject(
-		PATCHVIEW_TEX_W, PATCHVIEW_TEX_H,
+		Config::PATCHVIEW_TEX_W(), Config::PATCHVIEW_TEX_H(),
 		1, true,
 		0, 0,
 		true, false,
@@ -291,6 +291,82 @@ bool InitGLObjects() {
 	p_tmp_formfactors = new float[patchCount];
 	for (int i = 0; i < patchCount; i++)
 		p_tmp_formfactors[i] = 0;
+
+
+	unsigned int HEMICUBE_W = Config::HEMICUBE_W();
+	unsigned int HEMICUBE_H = Config::HEMICUBE_H();
+	
+	// 'okna' do kterych se budou kreslit jednotlive pohledy; odpovida 'nakresu' v FormFactors.cpp
+	// x, y, w, h		(0,0 = levy dolni roh)
+	p_viewport_list = new int*[5];
+	for (unsigned int i = 0; i < 5; i++) {
+		p_viewport_list[i] = new int[4];
+		p_viewport_list[i][2] = HEMICUBE_W;
+		p_viewport_list[i][3] = HEMICUBE_H;
+
+		switch (i) {
+			case 0:
+				p_viewport_list[i][0] = 0;
+				p_viewport_list[i][1] = HEMICUBE_H;
+				break;
+			case 1:
+				p_viewport_list[i][0] = HEMICUBE_W;
+				p_viewport_list[i][1] = HEMICUBE_H/2;
+				break;
+			case 2:
+				p_viewport_list[i][0] = -1 * int(HEMICUBE_W/2);
+				p_viewport_list[i][1] = 0;
+				break;
+			case 3:
+				p_viewport_list[i][0] = int(HEMICUBE_W*1.5);
+				p_viewport_list[i][1] = 0;
+				break;
+			case 4:
+				p_viewport_list[i][0] = HEMICUBE_W/2;
+				p_viewport_list[i][1] = 0;
+				break;
+		}
+	}	
+
+	// oblasti v texture, do kterych je povoleno kreslit;
+	// jelikoz se nektere casti kresli pres sebe, muze pri kresleni 'pruhledna' vznikat
+	// nezadouci zviditelneni drive vykreslene casti pohledu, ktery ale ma byt skryty, coz resi glScissor
+	// 
+	// x, y, w, h
+	p_scissors_list = new int*[5];
+	for (unsigned int i = 0; i < 5; i++) {
+		p_scissors_list[i] = new int[4];
+
+		if (i == 0 || i == 1) {
+			p_scissors_list[i][1] = HEMICUBE_H;
+			p_scissors_list[i][3] = HEMICUBE_H/2;
+		} else {
+			p_scissors_list[i][1] = 0;
+			p_scissors_list[i][3] = HEMICUBE_H;
+		}
+
+		if (i == 2 || i == 3)
+			p_scissors_list[i][2] = HEMICUBE_W/2;
+		else
+			p_scissors_list[i][2] = HEMICUBE_W;
+		
+		switch (i) {
+			case 0:
+			case 2:
+				p_scissors_list[i][0] = 0;
+				break;
+			case 1:
+				p_scissors_list[i][0] = HEMICUBE_W;
+				break;
+			case 3:
+				p_scissors_list[i][0] = int(HEMICUBE_W*1.5);
+				break;
+			case 4:
+				p_scissors_list[i][0] = HEMICUBE_W/2;
+				break;
+		}
+	}
+	
 
 	return true;
 }
@@ -333,7 +409,9 @@ bool InitCLObjects() {
 	   return false;
 	}
 	
-
+	unsigned int PATCHVIEW_TEX_W = Config::PATCHVIEW_TEX_W();
+	unsigned int PATCHVIEW_TEX_H = Config::PATCHVIEW_TEX_H();
+	unsigned int PATCHVIEW_TEX_RES = Config::PATCHVIEW_TEX_RES();
 	
 	// pole ID patchu a jejich energii (na shodnych indexech)
 	ocl_arg_ids = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY, PATCHVIEW_TEX_RES*sizeof(uint32_t), NULL, &error);
@@ -343,7 +421,6 @@ bool InitCLObjects() {
 	ocl_arg_writeindex = clCreateBuffer(ocl_context, CL_MEM_READ_WRITE, sizeof(unsigned int), NULL, &error);
 
 	// data textury pohledu z nejakeho patche
-	//ocl_arg_patchview = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES*sizeof(unsigned int), NULL, &error);
 	ocl_arg_patchview = clCreateFromGLTexture2D(ocl_context, CL_MEM_READ_ONLY, GL_TEXTURE_2D, 0, n_patchlook_texture, &error);
 
 	// data 'textury' form factoru
@@ -473,6 +550,11 @@ bool InitCLObjects() {
 		return false;
 	}
 
+	// pripravit pocty vlaken
+	ocl_local_work_size = new unsigned int[2];
+	ocl_local_work_size[0] = Config::OCL_WORKITEMS_X();		ocl_local_work_size[1] = 8;
+	ocl_global_work_size = new unsigned int[2];
+	ocl_global_work_size[0] = Config::OCL_WORKITEMS_X();	ocl_global_work_size[1] = Config::OCL_WORKITEMS_Y();
 
 	// round up - zaokrouhlit globalni pocty vlaken; pokud se vnuti rucne, je to casto vykonnejsi nez kdyz je odhadne samo OCL
 	for(int i = 1; i < 2; ++ i) {
@@ -495,9 +577,18 @@ bool InitCLObjects() {
  */
 void CleanupGLObjects()
 {
+	// smaze dynamicky alokovane objekty
 	delete[] n_color_array_object;
 	delete[] p_tmp_formfactors;
-	// smaze dynamicky alokovane objekty
+	delete[] p_formfactors;
+
+	for (unsigned int i = 0; i < 5; i++) {
+		delete[] p_viewport_list[i];
+		delete[] p_scissors_list[i];
+	}
+	delete[] p_viewport_list;
+	delete[] p_scissors_list;
+	
 
 	glDeleteBuffers(1, &n_vertex_buffer_object);
 	glDeleteBuffers(1, &n_index_buffer_object);
@@ -528,6 +619,8 @@ void CleanupCLObjects() {
 
 	delete[] p_ocl_pids;
 	delete[] p_ocl_energies;
+	delete[] ocl_local_work_size;
+	delete[] ocl_global_work_size;
 }
 
 /**
@@ -621,6 +714,13 @@ void DrawPatchLookPreview() {
  */
 int main(int n_arg_num, const char **p_arg_list)
 {
+	// parsovani parametru
+
+
+
+	// parametry zname, muzeme zmrazit config a nechat jej dopocitat ostatni hodnoty
+	Config::freeze();
+
 	// registruje tridu okna
 	WNDCLASSEX t_wnd_class;
 	t_wnd_class.cbSize = sizeof(WNDCLASSEX);
@@ -677,7 +777,7 @@ int main(int n_arg_num, const char **p_arg_list)
 
 	// nacteme globalni objekt sceny a nastavime limit velikosti patchu
 	scene.load();	
-	scene.maxPatchArea = MAX_PATCH_AREA;
+	scene.maxPatchArea = Config::MAX_PATCH_AREA();
 	
 	// vyrobime objekty OpenGL, nutne ke kresleni
 	if(!InitGLObjects()) {
@@ -958,7 +1058,7 @@ void OnIdle(CGL30Driver &driver)
 		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
 		glViewport(0, 0, fbo->n_Width(), fbo->n_Height());		
 
-		for (int shoot = 0; shoot < 100 && computeRadiosity; shoot++) { 
+		for (int shoot = 0; shoot < Config::SHOOTS_PER_CYCLE() && computeRadiosity; shoot++) { 
 
 			// najit patch s nejvetsi energii
 			unsigned int patchId = scene.getHighestRadiosityPatchId();
@@ -1060,7 +1160,9 @@ void OnIdle(CGL30Driver &driver)
 				}
 				
 				// vyprazdnit pole pro dalsi pruchod
-				fill_n(p_tmp_formfactors, scenePatchesCount, 0);
+				//fill_n(p_tmp_formfactors, scenePatchesCount, (float)0);
+				for (unsigned int xx = 0; xx < scenePatchesCount; xx++)
+					p_tmp_formfactors[xx] = 0;
 			} // for each interval
 
 
@@ -1279,7 +1381,7 @@ void LoadFromFile() {
 
 				// vytvorit novou scenu
 				scene = ModelContainer::ModelContainer();
-				scene.maxPatchArea = MAX_PATCH_AREA;
+				scene.maxPatchArea = Config::MAX_PATCH_AREA();
 
 				// vytvorit z nactenych patchu model, ktery vlozime do sceny
 				Model* dummy = new LoadingModel(data, count);
