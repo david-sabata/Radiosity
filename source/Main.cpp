@@ -3,6 +3,7 @@
 #include "Main.h"
 
 
+
 /**
  *	@brief vytvori vsechny OpenGL objekty, potrebne pro kresleni
  *	@return vraci true pri uspechu, false pri neuspechu
@@ -61,11 +62,15 @@ bool InitGLObjects() {
 	{
 		Patch** patches = scene.getPatches();
 		unsigned int indCnt = scene.getPatchesCount() * 4; // pocet neopakujicich se indexu
-		uint32_t* colorData = new uint32_t[indCnt];
-		for (unsigned int i=0; i < indCnt; i++) {
-			colorData[i] = Colors::packColor( patches[i/4]->radiosity );
+		float* colorData = new float[indCnt * 3]; // kazdy vrchol ma 3 barevne slozky
+		for (unsigned int i=0; i < indCnt * 3; i += 3) {
+			//colorData[i] = Colors::packColor( patches[i/4]->radiosity );
+			Vector3f col = patches[i/12]->radiosity;
+			colorData[i] = col.x;
+			colorData[i+1] = col.y;
+			colorData[i+2] = col.z;
 		}
-		glBufferData(GL_ARRAY_BUFFER, indCnt * sizeof(uint32_t), colorData, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, indCnt * 3 * sizeof(uint32_t), colorData, GL_DYNAMIC_DRAW);
 		delete[] colorData;
 	}
 
@@ -269,14 +274,14 @@ bool InitGLObjects() {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);		
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Config::PATCHVIEW_TEX_W(), Config::PATCHVIEW_TEX_H(), 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Config::PATCHVIEW_TEX_W(), Config::PATCHVIEW_TEX_H() * Config::HEMICUBES_CNT(), 0, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 
 
 	// vytvorit FBO pro kresleni pohledu z patchu do textury
 	fbo = new CGLFrameBufferObject(
-		Config::PATCHVIEW_TEX_W(), Config::PATCHVIEW_TEX_H(),
+		Config::PATCHVIEW_TEX_W(), Config::PATCHVIEW_TEX_H() * Config::HEMICUBES_CNT(),
 		1, true,
 		0, 0,
 		true, false,
@@ -291,7 +296,7 @@ bool InitGLObjects() {
 
 	// predpocitat form factory
 	p_formfactors = precomputeHemicubeFormFactors();
-
+	
 	// alokovat misto pro vystup formfactoru z kernelu
 	p_tmp_formfactors = new float[patchCount];
 	for (int i = 0; i < patchCount; i++)
@@ -300,78 +305,93 @@ bool InitGLObjects() {
 
 	unsigned int HEMICUBE_W = Config::HEMICUBE_W();
 	unsigned int HEMICUBE_H = Config::HEMICUBE_H();
-	
+	unsigned int HEMICUBES_CNT = Config::HEMICUBES_CNT();
+
+	// pripravit misto pro docasne hodnoty radiosit patchu ze kterych se prave strili (v pripade vice hemicubes)
+	p_tmp_radiosities = new Vector3f[HEMICUBES_CNT];
+
+
 	// 'okna' do kterych se budou kreslit jednotlive pohledy; odpovida 'nakresu' v FormFactors.cpp
 	// x, y, w, h		(0,0 = levy dolni roh)
-	p_viewport_list = new int*[5];
-	for (unsigned int i = 0; i < 5; i++) {
-		p_viewport_list[i] = new int[4];
-		p_viewport_list[i][2] = HEMICUBE_W;
-		p_viewport_list[i][3] = HEMICUBE_H;
+	p_viewport_list = new int**[HEMICUBES_CNT];
+	for (unsigned int hi = 0; hi < HEMICUBES_CNT; hi++) {
+		p_viewport_list[hi] = new int*[5];
+		for (unsigned int i = 0; i < 5; i++) {
+			p_viewport_list[hi][i] = new int[4];
+			p_viewport_list[hi][i][2] = HEMICUBE_W;
+			p_viewport_list[hi][i][3] = HEMICUBE_H;
 
-		switch (i) {
-			case 0:
-				p_viewport_list[i][0] = 0;
-				p_viewport_list[i][1] = HEMICUBE_H;
-				break;
-			case 1:
-				p_viewport_list[i][0] = HEMICUBE_W;
-				p_viewport_list[i][1] = HEMICUBE_H/2;
-				break;
-			case 2:
-				p_viewport_list[i][0] = -1 * int(HEMICUBE_W/2);
-				p_viewport_list[i][1] = 0;
-				break;
-			case 3:
-				p_viewport_list[i][0] = int(HEMICUBE_W*1.5);
-				p_viewport_list[i][1] = 0;
-				break;
-			case 4:
-				p_viewport_list[i][0] = HEMICUBE_W/2;
-				p_viewport_list[i][1] = 0;
-				break;
-		}
-	}	
+			switch (i) {
+				case 0: // nahoru
+					p_viewport_list[hi][i][0] = 0;
+					p_viewport_list[hi][i][1] = HEMICUBE_H + int(HEMICUBE_W * 1.5 * hi);
+					break;
+				case 1: // dolu
+					p_viewport_list[hi][i][0] = HEMICUBE_W;
+					p_viewport_list[hi][i][1] = HEMICUBE_H/2  + int(HEMICUBE_W * 1.5 * hi);
+					break;
+				case 2: // vlevo
+					p_viewport_list[hi][i][0] = -1 * int(HEMICUBE_W/2);
+					p_viewport_list[hi][i][1] = 0 + int(HEMICUBE_W * 1.5 * hi);
+					break;
+				case 3: // vpravo
+					p_viewport_list[hi][i][0] = int(HEMICUBE_W*1.5);
+					p_viewport_list[hi][i][1] = 0 + int(HEMICUBE_W * 1.5 * hi);
+					break;
+				case 4: // pred sebe
+					p_viewport_list[hi][i][0] = HEMICUBE_W/2;
+					p_viewport_list[hi][i][1] = 0 + int(HEMICUBE_W * 1.5 * hi);
+					break;
+			}
+		}	
+	}
 
 	// oblasti v texture, do kterych je povoleno kreslit;
 	// jelikoz se nektere casti kresli pres sebe, muze pri kresleni 'pruhledna' vznikat
 	// nezadouci zviditelneni drive vykreslene casti pohledu, ktery ale ma byt skryty, coz resi glScissor
 	// 
 	// x, y, w, h
-	p_scissors_list = new int*[5];
-	for (unsigned int i = 0; i < 5; i++) {
-		p_scissors_list[i] = new int[4];
+	p_scissors_list = new int**[HEMICUBES_CNT];
+	for (unsigned int hi = 0; hi < HEMICUBES_CNT; hi++) {
+		p_scissors_list[hi] = new int*[5];
+		for (unsigned int i = 0; i < 5; i++) {
+			p_scissors_list[hi][i] = new int[4];
 
-		if (i == 0 || i == 1) {
-			p_scissors_list[i][1] = HEMICUBE_H;
-			p_scissors_list[i][3] = HEMICUBE_H/2;
-		} else {
-			p_scissors_list[i][1] = 0;
-			p_scissors_list[i][3] = HEMICUBE_H;
-		}
+			if (i == 0 || i == 1) {
+				p_scissors_list[hi][i][1] = HEMICUBE_H + int(HEMICUBE_W * 1.5 * hi);
+				p_scissors_list[hi][i][3] = HEMICUBE_H/2;
+			} else {
+				p_scissors_list[hi][i][1] = 0 + int(HEMICUBE_W * 1.5 * hi);
+				p_scissors_list[hi][i][3] = HEMICUBE_H;
+			}
 
-		if (i == 2 || i == 3)
-			p_scissors_list[i][2] = HEMICUBE_W/2;
-		else
-			p_scissors_list[i][2] = HEMICUBE_W;
+			if (i == 2 || i == 3)
+				p_scissors_list[hi][i][2] = HEMICUBE_W/2;
+			else
+				p_scissors_list[hi][i][2] = HEMICUBE_W;
 		
-		switch (i) {
-			case 0:
-			case 2:
-				p_scissors_list[i][0] = 0;
-				break;
-			case 1:
-				p_scissors_list[i][0] = HEMICUBE_W;
-				break;
-			case 3:
-				p_scissors_list[i][0] = int(HEMICUBE_W*1.5);
-				break;
-			case 4:
-				p_scissors_list[i][0] = HEMICUBE_W/2;
-				break;
+			switch (i) {
+				case 0:
+				case 2:
+					p_scissors_list[hi][i][0] = 0;
+					break;
+				case 1:
+					p_scissors_list[hi][i][0] = HEMICUBE_W;
+					break;
+				case 3:
+					p_scissors_list[hi][i][0] = int(HEMICUBE_W*1.5);
+					break;
+				case 4:
+					p_scissors_list[hi][i][0] = HEMICUBE_W/2;
+					break;
+			}
 		}
 	}
-	
+
+
+	// pripravit pole pro patche s nejvyssi energii
+	p_emitters = new Patch*[Config::HEMICUBES_CNT()];
+	p_emitters_ids = new unsigned int[Config::HEMICUBES_CNT()];
 
 	return true;
 }
@@ -417,10 +437,12 @@ bool InitCLObjects() {
 	unsigned int PATCHVIEW_TEX_W = Config::PATCHVIEW_TEX_W();
 	unsigned int PATCHVIEW_TEX_H = Config::PATCHVIEW_TEX_H();
 	unsigned int PATCHVIEW_TEX_RES = Config::PATCHVIEW_TEX_RES();
+	unsigned int HEMICUBES_CNT = Config::HEMICUBES_CNT();
 	
 	// pole ID patchu a jejich energii (na shodnych indexech)
-	ocl_arg_ids = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY, PATCHVIEW_TEX_RES*sizeof(uint32_t), NULL, &error);
-	ocl_arg_energies = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY, PATCHVIEW_TEX_RES*sizeof(float), NULL, &error);
+	ocl_arg_hemicubes = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY, PATCHVIEW_TEX_RES * HEMICUBES_CNT * sizeof(uint32_t), NULL, &error);
+	ocl_arg_ids = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY, PATCHVIEW_TEX_RES * HEMICUBES_CNT * sizeof(uint32_t), NULL, &error);
+	ocl_arg_energies = clCreateBuffer(ocl_context, CL_MEM_WRITE_ONLY, PATCHVIEW_TEX_RES * HEMICUBES_CNT * sizeof(float), NULL, &error);
 
 	// index do ID patchu a energii, sdileny mezi instacemi, atomicky posouvany
 	ocl_arg_writeindex = clCreateBuffer(ocl_context, CL_MEM_READ_WRITE, sizeof(unsigned int), NULL, &error);
@@ -429,7 +451,7 @@ bool InitCLObjects() {
 	ocl_arg_patchview = clCreateFromGLTexture2D(ocl_context, CL_MEM_READ_ONLY, GL_TEXTURE_2D, 0, n_patchlook_texture, &error);
 
 	// data 'textury' form factoru
-	ocl_arg_ffactors = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES*sizeof(float), NULL, &error);
+	ocl_arg_ffactors = clCreateBuffer(ocl_context, CL_MEM_READ_ONLY, PATCHVIEW_TEX_RES * HEMICUBES_CNT * sizeof(float), NULL, &error);
 
 	_ASSERT(error == CL_SUCCESS);
 	
@@ -531,24 +553,27 @@ bool InitCLObjects() {
 		
 	
 	unsigned int spanLength = PATCHVIEW_TEX_W;
+	unsigned int hemicubesCnt = HEMICUBES_CNT;
 
 	// nastavit argumenty kernelu	
-	error  = clSetKernelArg (ocl_kernel, 0, sizeof(cl_mem), &ocl_arg_ids);
-	error |= clSetKernelArg (ocl_kernel, 1, sizeof(cl_mem), &ocl_arg_energies);
-	error |= clSetKernelArg (ocl_kernel, 2, sizeof(cl_mem), &ocl_arg_writeindex);
-	error |= clSetKernelArg (ocl_kernel, 3, sizeof(cl_mem), &ocl_arg_patchview);
-	error |= clSetKernelArg (ocl_kernel, 4, sizeof(cl_sampler), &ocl_sampler);
-	error |= clSetKernelArg (ocl_kernel, 5, sizeof(cl_mem), &ocl_arg_ffactors);
-	error |= clSetKernelArg (ocl_kernel, 6, sizeof(unsigned int), &PATCHVIEW_TEX_W);
-	error |= clSetKernelArg (ocl_kernel, 7, sizeof(unsigned int), &PATCHVIEW_TEX_H);
-	error |= clSetKernelArg (ocl_kernel, 8, sizeof(unsigned int), &spanLength);
+	error  = clSetKernelArg (ocl_kernel, 0, sizeof(cl_mem), &ocl_arg_hemicubes);
+	error |= clSetKernelArg (ocl_kernel, 1, sizeof(cl_mem), &ocl_arg_ids);
+	error |= clSetKernelArg (ocl_kernel, 2, sizeof(cl_mem), &ocl_arg_energies);
+	error |= clSetKernelArg (ocl_kernel, 3, sizeof(cl_mem), &ocl_arg_writeindex);
+	error |= clSetKernelArg (ocl_kernel, 4, sizeof(cl_mem), &ocl_arg_patchview);
+	error |= clSetKernelArg (ocl_kernel, 5, sizeof(cl_sampler), &ocl_sampler);
+	error |= clSetKernelArg (ocl_kernel, 6, sizeof(cl_mem), &ocl_arg_ffactors);
+	error |= clSetKernelArg (ocl_kernel, 7, sizeof(unsigned int), &PATCHVIEW_TEX_W);
+	error |= clSetKernelArg (ocl_kernel, 8, sizeof(unsigned int), &PATCHVIEW_TEX_H);
+	error |= clSetKernelArg (ocl_kernel, 9, sizeof(unsigned int), &spanLength);
+	error |= clSetKernelArg (ocl_kernel, 10, sizeof(unsigned int), &hemicubesCnt);
 	if (error != CL_SUCCESS) {
 		cerr << "error: can't set up ProcessHemicube kernel arguments" << endl;
 		return false;
 	}
 
 	// naplnit buffer argumentu - pole s formfactory - konstantni po celou dobu
-	error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_ffactors, CL_TRUE, 0, PATCHVIEW_TEX_RES*sizeof(float), p_formfactors,
+	error = clEnqueueWriteBuffer(ocl_queue, ocl_arg_ffactors, CL_TRUE, 0, PATCHVIEW_TEX_RES * HEMICUBES_CNT * sizeof(float), p_formfactors,
  					0, NULL, NULL);
 	if (error != CL_SUCCESS) {
 		cerr << "error: can't write to ocl_arg_ffactors buffer" << endl;
@@ -569,9 +594,9 @@ bool InitCLObjects() {
 	
 	// alokovat prostor, do ktereho se budou kopirovat vystupni data z kernelu; alokace v kreslici smycce by zdrzovala
 	// PATCHVIEW_TEX_RES je maximalni pocet pro pripad, kdy by kazdy jeden pixel textury mel jinou barvu/patchId
-	p_ocl_pids = new uint32_t[ PATCHVIEW_TEX_RES ];
-	p_ocl_energies = new float[ PATCHVIEW_TEX_RES ];
-
+	p_ocl_pids = new uint32_t[ PATCHVIEW_TEX_RES * HEMICUBES_CNT ];
+	p_ocl_energies = new float[ PATCHVIEW_TEX_RES * HEMICUBES_CNT ];
+	p_ocl_hemicubes = new uint32_t[ PATCHVIEW_TEX_RES * HEMICUBES_CNT ];
 
 	cout << "OpenCL init OK" << endl;
 	return true;
@@ -586,27 +611,33 @@ void CleanupGLObjects()
 	delete[] n_color_array_object;
 	delete[] p_tmp_formfactors;
 	delete[] p_formfactors;
+	delete[] p_tmp_radiosities;
 
-	for (unsigned int i = 0; i < 5; i++) {
-		delete[] p_viewport_list[i];
-		delete[] p_scissors_list[i];
+	for (unsigned int hi = 0; hi < Config::HEMICUBES_CNT(); hi++) {
+		for (unsigned int i = 0; i < 5; i++) {
+			delete[] p_viewport_list[hi][i];
+			delete[] p_scissors_list[hi][i];
+		}
+		delete[] p_viewport_list[hi];
+		delete[] p_scissors_list[hi];
 	}
 	delete[] p_viewport_list;
 	delete[] p_scissors_list;
+	delete[] p_emitters;
+	delete[] p_emitters_ids;
 	
-
+	// smaze vertex buffer objekty
 	glDeleteBuffers(1, &n_vertex_buffer_object);
 	glDeleteBuffers(1, &n_index_buffer_object);
-	// smaze vertex buffer objekty
 
+	// smaze shadery
 	Shaders::cleanup();
-	// smaze shadery		
 
-	glDeleteTextures(1, &n_patchlook_texture);
 	// smaze textury
+	glDeleteTextures(1, &n_patchlook_texture);
 
-	delete fbo;
 	// smaze render buffer
+	delete fbo;	
 }
 
 /**
@@ -616,12 +647,14 @@ void CleanupCLObjects() {
 	clReleaseKernel(ocl_kernel);
 	clReleaseCommandQueue(ocl_queue);
 	clReleaseContext(ocl_context);
+	clReleaseMemObject(ocl_arg_hemicubes);
 	clReleaseMemObject(ocl_arg_ids);
 	clReleaseMemObject(ocl_arg_energies);
 	clReleaseMemObject(ocl_arg_writeindex);
 	clReleaseMemObject(ocl_arg_patchview);
 	clReleaseMemObject(ocl_arg_ffactors);
 
+	delete[] p_ocl_hemicubes;
 	delete[] p_ocl_pids;
 	delete[] p_ocl_energies;
 	delete[] ocl_local_work_size;
@@ -925,7 +958,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 						glBindVertexArray(n_vertex_array_object);														
 						glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
 						glEnableVertexAttribArray(1);
-						glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
+						glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, p_OffsetInVBO(0));
 						glBindVertexArray(0); 
 						cout << "Switched to radiative energies" << endl;
 					} else {
@@ -933,7 +966,6 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 						glBindVertexArray(n_vertex_array_object);														
 						glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 						glEnableVertexAttribArray(1);
-						//glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
 						glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, p_OffsetInVBO(0));
 						glBindVertexArray(0); 
 						cout << "Switched to illuminative energies" << endl;
@@ -1080,9 +1112,8 @@ void OnIdle(CGL30Driver &driver)
 
 		for (unsigned int shoot = 0; shoot < Config::SHOOTS_PER_CYCLE() && computeRadiosity; shoot++) { 
 
-			// najit patch s nejvetsi energii
-			unsigned int patchId = scene.getHighestRadiosityPatchId();
-			Patch* emitter = scenePatches[patchId];
+			// najit patche s nejvetsi energii
+			scene.getHighestRadiosityPatchesId(Config::HEMICUBES_CNT(), p_emitters, p_emitters_ids);
 
 			// pro kazdy interval patchu ve scene
 			for (unsigned int interval = 0; interval < patchIntervals.size(); interval++) {
@@ -1091,42 +1122,56 @@ void OnIdle(CGL30Driver &driver)
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 			
 				glEnable(GL_SCISSOR_TEST);
 
-				// celkem 5 pohledu
-				for(int i=0; i < 5; i++) {
+				// pro kazdou hemicube
+				for (unsigned int hi = 0; hi < Config::HEMICUBES_CNT(); hi++) {
+					// pokud uz neni patch s energii, preskocit - vykresli se cerno
+					if (p_emitters[hi] == NULL)
+						continue;
+
+					// poznacit si puvodni hodnotu radiosity, ta se po uplnem vyzareni patche odecte
+					p_tmp_radiosities[hi] = p_emitters[hi]->radiosity;
+
+					// celkem 5 pohledu
+					for(int i=0; i < 5; i++) {
 				
-					Camera::PatchLook dir = p_patchlook_perm[i];
+						Camera::PatchLook dir = p_patchlook_perm[i];
 
-					// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
-					{
-						// matice perspektivni projekce
-						Matrix4f t_projection;
-						CGLTransform::Perspective(t_projection, 90, 1.0f, 0.01f, 1000);		 // ratio 1.0!
+						// spocitame modelview - projection matici, kterou potrebujeme k transformaci vrcholu		
+						{
+							// matice perspektivni projekce
+							Matrix4f t_projection;
+							CGLTransform::Perspective(t_projection, 90, 1.0f, 0.01f, 1000);		 // ratio 1.0!
 		
-						// modelview
-						Matrix4f t_modelview;
-						t_modelview.Identity();				
+							// modelview
+							Matrix4f t_modelview;
+							t_modelview.Identity();				
 
-						// vynasobit pohledem kamery patche
-						patchCam.lookFromPatch(scenePatches[patchId], dir);
-						t_modelview *= patchCam.GetMatrix();
+							// vynasobit pohledem kamery patche
+							patchCam.lookFromPatch(p_emitters[hi], dir);
+							t_modelview *= patchCam.GetMatrix();
 
-						// matice pohledu kamery
-						t_mvp = t_projection * t_modelview;
-					}
+							// matice pohledu kamery
+							t_mvp = t_projection * t_modelview;
+						}
 
-					// nahrajeme matici do OpenGL jako parametr shaderu
-					glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
+						// nahrajeme matici do OpenGL jako parametr shaderu
+						glUniformMatrix4fv(n_patchprogram_mvp_matrix_uniform, 1, GL_FALSE, &t_mvp[0][0]);		
 
-					// nastavit parametry viewportu a oblast, do ktere je povoleno kreslit
-					glScissor(p_scissors_list[i][0], p_scissors_list[i][1], p_scissors_list[i][2], p_scissors_list[i][3]);
-					glViewport(p_viewport_list[i][0], p_viewport_list[i][1], p_viewport_list[i][2], p_viewport_list[i][3]);
+						// nastavit parametry viewportu a oblast, do ktere je povoleno kreslit
+						glScissor(p_scissors_list[hi][i][0], p_scissors_list[hi][i][1], p_scissors_list[hi][i][2], p_scissors_list[hi][i][3]);
+						glViewport(p_viewport_list[hi][i][0], p_viewport_list[hi][i][1], p_viewport_list[hi][i][2], p_viewport_list[hi][i][3]);
 		
-					// vykreslit do textury (pres FBO)
-					DrawPatchLook(interval);
-				}
+						// vykreslit do textury (pres FBO)
+						DrawPatchLook(interval);
+
+					} // pro kazdy pohled
+
+				} // pro kazdou hemicube
 
 				glDisable(GL_SCISSOR_TEST);
-	
+					
+				//FBO2BMP();
+				
 				// priznak chyby pri praci s OCL
 				cl_int error = 0;			
 
@@ -1151,6 +1196,7 @@ void OnIdle(CGL30Driver &driver)
 				_ASSERT(error == CL_SUCCESS);
 
 				// precist data
+				error  = clEnqueueReadBuffer (ocl_queue, ocl_arg_hemicubes, CL_TRUE, 0, n_last_index*sizeof(uint32_t), p_ocl_hemicubes, 0, NULL, NULL);
 				error  = clEnqueueReadBuffer (ocl_queue, ocl_arg_ids, CL_TRUE, 0, n_last_index*sizeof(uint32_t), p_ocl_pids, 0, NULL, NULL);
 				error |= clEnqueueReadBuffer (ocl_queue, ocl_arg_energies, CL_TRUE, 0, n_last_index*sizeof(float), p_ocl_energies, 0, NULL, NULL);		
 				_ASSERT(error == CL_SUCCESS);
@@ -1160,42 +1206,49 @@ void OnIdle(CGL30Driver &driver)
 				error |= clEnqueueReleaseGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
 				_ASSERT(error == CL_SUCCESS);				
 
-				// secist formfactory do p_tmp_formfactors
-				for (unsigned int i = 0; i < n_last_index; i++) {			
-
-					if (p_ocl_pids[i] >= scenePatchesCount) {
-						cerr << "Uknown patch id: " << p_ocl_pids[i] << "! Is there a problem with video card?" << endl;
+				for (unsigned int hi = 0; hi < Config::HEMICUBES_CNT(); hi++) {
+					// jenom pokud se skutecne z patche koukalo
+					if (p_emitters[hi] == NULL)
 						continue;
+
+					// secist formfactory do p_tmp_formfactors
+					for (unsigned int i = 0; i < n_last_index; i++) {			
+
+						if (p_ocl_pids[i] >= scenePatchesCount) {
+							cerr << "Uknown patch id: " << p_ocl_pids[i] << "! Is there a problem with video card?" << endl;
+							continue;
+						}
+
+						if (p_ocl_hemicubes[i] != hi)
+							continue;
+
+						// jeste nesirit, nejdriv jen sesbirat
+						p_tmp_formfactors[p_ocl_pids[i]] += p_ocl_energies[i];
+					}					
+
+					// prenest energie
+					for (unsigned int i = 0; i < scenePatchesCount; i++) {
+						Patch* p = scenePatches[i];
+						p->radiosity += p_tmp_radiosities[hi] * p_tmp_formfactors[i] * p->getReflectivity() * p_emitters[hi]->getColor();
 					}
-
-					// jeste nesirit, nejdriv jen sesbirat
-					p_tmp_formfactors[p_ocl_pids[i]] += p_ocl_energies[i];
-				}
-
-				// prenest energie
-				for (unsigned int i = 0; i < scenePatchesCount; i++) {
-					Patch* p = scenePatches[i];
-					p->radiosity += emitter->radiosity * p_tmp_formfactors[i] * p->getReflectivity() * emitter->getColor();
+				
+					// vyprazdnit pole pro dalsi pruchod
+					fill_n(p_tmp_formfactors, scenePatchesCount, (float)0);
 				}
 				
-				// vyprazdnit pole pro dalsi pruchod
-				fill_n(p_tmp_formfactors, scenePatchesCount, (float)0);				
 			} // for each interval
 
 
-			// zdroj se vyzaril
-			Vector3f lastEnergy = emitter->radiosity; // zapamatovat si hodnotu
-			emitter->illumination += emitter->radiosity;
-			emitter->radiosity = Vector3f(0.0f, 0.0f, 0.0f);
-				
-			/*
-			if (emitter->illumination.x > 1.0)
-				emitter->illumination.x = 1.0;
-			if (emitter->illumination.y > 1.0)
-				emitter->illumination.y = 1.0;
-			if (emitter->illumination.z > 1.0)
-				emitter->illumination.z = 1.0;	
-			*/
+			// zdroje se vyzarily
+			Vector3f lastEnergy; // posledni vyzarena energie
+			for (unsigned int hi = 0; hi < Config::HEMICUBES_CNT(); hi++) {
+				if (p_emitters[hi] == NULL)
+					continue;
+
+				lastEnergy = p_emitters[hi]->radiosity;
+				p_emitters[hi]->illumination += p_tmp_radiosities[hi];
+				p_emitters[hi]->radiosity -= p_tmp_radiosities[hi];
+			}
 
 			// ukoncit, jakmile energie nejnabitejsiho patche ve scene klesne pod danou hranici
 			if (lastEnergy.f_Length2() < 0.001) {
@@ -1238,25 +1291,26 @@ void OnIdle(CGL30Driver &driver)
 			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		}
 		
-		/* pro zobrazovani radiativnich energii
+// pro zobrazovani radiativnich energii
+//#define SHOW_RADIATIVE
+#ifdef SHOW_RADIATIVE
 		// nabindovat VBO s radiativnimi energiemi a updatovat jej
 		{
 			glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
-			uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);		
+			float* buffer = (float*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);		
 
-			for (unsigned int i=0; i < scenePatchesCount; i++) {				
-				uint32_t newColor = Colors::packColor(scenePatches[i]->radiosity);
-				uint32_t newData[4] = {
-					newColor,
-					newColor,
-					newColor,
-					newColor
-				};
+			for (unsigned int i = 0; i < scenePatchesCount; i++) {				
+				float newData[4 * 3]; 
+				for (unsigned int n = 0; n < 12; n += 3) {
+					newData[n] = scenePatches[i]->radiosity.x;
+					newData[n+1] = scenePatches[i]->radiosity.y;
+					newData[n+2] = scenePatches[i]->radiosity.z;
+				}
 
 				if (buffer != NULL)
-					memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+					memcpy(buffer + i*4*3, newData, 4*3*sizeof(float));
 				else
-					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * 3 * sizeof(float), 4 * 3 * sizeof(float), newData);
 			}
 
 			if (buffer != NULL) {
@@ -1266,7 +1320,7 @@ void OnIdle(CGL30Driver &driver)
 			
 			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer		
 		}
-		*/
+#endif		
 
 	} // if scenePatchesCount > 0
 

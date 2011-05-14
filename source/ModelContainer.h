@@ -1,5 +1,6 @@
 #include <vector>
 #include <stdint.h>
+#include <list>
 #include "PrimitiveModel.h"
 #include "WaveFrontModel.h"
 #include "Vector.h"
@@ -28,10 +29,15 @@ class ModelContainer {
 		Patch**	getPatches(); // vraci pole vsech patchu ve scene (pokud je scena frozen, je vzdy konstantni)
 		unsigned int	getPatchesCount(); // vraci pocet patchu ve scene
 		unsigned int	getHighestRadiosityPatchId(); // vraci cislo patche s nejvetsi radiativni energii
+		void			getHighestRadiosityPatchesId(unsigned int count, Patch** p_emitters, unsigned int* p_emitters_ids);
 
 		double maxPatchArea; // maximalni obsah plosek (pokud je vetsi nez 0, deli se plosky dokud neni plocha mensi)
 
-	protected:
+		bool ModelContainer::operator()(unsigned int a, unsigned int b);
+
+	protected:		
+		bool compareEnergies(unsigned int a, unsigned int b);
+
 		bool needRefresh;	// pocty vrcholu a indexu a obsahy kontejneru nejsou aktualni
 
 		std::vector<Model *> models; // pole modelu ve scene

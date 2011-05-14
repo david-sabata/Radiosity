@@ -220,6 +220,9 @@ unsigned int ModelContainer::getPatchesCount() {
  * Vraci ID patche s nejvyssi radiositou
  */
 unsigned int ModelContainer::getHighestRadiosityPatchId() {
+	if (needRefresh == true)
+		updateData();
+
 	unsigned int maxI = 0;
 	Patch* max = NULL;
 
@@ -232,3 +235,67 @@ unsigned int ModelContainer::getHighestRadiosityPatchId() {
 
 	return maxI;
 }
+
+
+/**
+ * Srovnavaci funkce pro ID patchu na zaklade jejich energii
+ */
+bool ModelContainer::compareEnergies(unsigned int a, unsigned int b) {
+	return patches[a]->radiosity.f_Length2() < patches[b]->radiosity.f_Length2();
+}
+
+
+class Comparator {
+	public:
+		Patch** patches;
+		bool Comparator::operator()(unsigned int a, unsigned int b) { 
+			return patches[a]->radiosity.f_Length2() < patches[b]->radiosity.f_Length2();
+		}
+};
+
+/**
+ * Naplni pole ID a ukazatelu daty 'count' patchu s nejvetsi energii
+ */
+void ModelContainer::getHighestRadiosityPatchesId(unsigned int count, Patch** p_emitters, unsigned int* p_emitters_ids) {
+	if (needRefresh == true)
+		updateData();
+
+	list<unsigned int> tops;
+	Comparator c = Comparator();
+	c.patches = patches;
+	
+	for (unsigned int pi = 0; pi < patchesCount; pi++) {
+		if (
+			tops.empty() || 
+			(patches[pi]->radiosity.f_Length2() > 0 && patches[tops.back()]->radiosity.f_Length2() <= patches[pi]->radiosity.f_Length2()) 
+		) {
+			tops.push_back(pi);
+			tops.sort(c);
+			tops.reverse(); // seradit od nejvyssiho k nejmensimu
+
+			if (tops.size() > count) {
+				list<unsigned int>::iterator it = tops.begin();
+				for (int i = 0; i < count; i++)
+					it++;
+				tops.erase(it, tops.end());
+			}
+		}
+	}
+
+	// zkopirovat data na vystup
+	list<unsigned int>::iterator it = tops.begin();
+	for (unsigned int i = 0; i < count; i++) {
+		if (it == tops.end()) {
+			p_emitters_ids[i] = 0;
+			p_emitters[i] = NULL;
+			continue;
+		}
+
+		p_emitters_ids[i] = (*it);
+		p_emitters[i] = patches[ p_emitters_ids[i] ];
+		it++;
+	}
+	
+}
+
+

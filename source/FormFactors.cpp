@@ -2,8 +2,13 @@
 
 #define Pi (3.1415926535897932384626433832795028841931f)
 
+//#define DO_BMP
+#ifdef DO_BMP
+static float f_hemicube_max = 1;
+#endif
+
+
 static int n_hemicube_size = 0; // = Config::HEMICUBE_W();
-//static float f_hemicube_max = 1;
 
 float* p_hemicube_tmp_formfactor = NULL;
 float* p_hemicube_tmp_formfactor_side = NULL;
@@ -62,7 +67,7 @@ void Calc_HemicubeFormFactors()
     }
     // strana
 
-	/*
+#ifdef DO_BMP
     for(x = 0, f_hemicube_max = 0; x < n_hemicube_size; x ++) {
         for(y = 0; y < n_hemicube_size / 2; y ++) {
             if(f_hemicube_max < p_hemicube_tmp_formfactor_side[x + y * n_hemicube_size])
@@ -77,7 +82,7 @@ void Calc_HemicubeFormFactors()
         }
     }
     // hleda nejvetsi polozku
-	*/
+#endif
 
 //#define __SUM_TEST
 #ifdef __SUM_TEST
@@ -105,24 +110,26 @@ void Calc_HemicubeFormFactors()
 
 
 
-/*
+
+#ifdef DO_BMP
 BMP *p_Hemicube_Test()
 {
 	BMP *p_temp;
-	int x, y, n;
+	unsigned int x, y;
+	int n;
 
 	if(!(p_temp = (BMP*)malloc(sizeof(BMP))))
 		return 0;
 
 	p_temp->n_Width = Config::PATCHVIEW_TEX_W();
-	p_temp->n_Height = Config::PATCHVIEW_TEX_H();
+	p_temp->n_Height = Config::PATCHVIEW_TEX_H() * Config::HEMICUBES_CNT();
 
 	if(!(p_temp->bytes = (unsigned __int32*)malloc(p_temp->n_Width *
 	   p_temp->n_Height * sizeof(unsigned __int32))))
 		return 0;
 
 	for(x = 0; x < Config::PATCHVIEW_TEX_W(); x ++) {
-		for(y = 0; y < Config::PATCHVIEW_TEX_H(); y ++) {
+		for(y = 0; y < Config::PATCHVIEW_TEX_H() * Config::HEMICUBES_CNT(); y ++) {
 			n = (int)(p_hemicube_formfactors[x + y * Config::PATCHVIEW_TEX_W()] / f_hemicube_max * 0xff);
 			p_temp->bytes[x + y * Config::PATCHVIEW_TEX_W()] = RGB(n, n, n);
 		}
@@ -132,6 +139,36 @@ BMP *p_Hemicube_Test()
 	return p_temp;
 }
 
+
+void FBO2BMP() {
+	BMP *p_temp;
+	if(!(p_temp = (BMP*)malloc(sizeof(BMP))))
+		return;
+
+	p_temp->n_Width = Config::PATCHVIEW_TEX_W();
+	p_temp->n_Height = Config::PATCHVIEW_TEX_H() * Config::HEMICUBES_CNT();
+
+	unsigned int res = p_temp->n_Width * p_temp->n_Height;
+
+	if(!(p_temp->bytes = (unsigned __int32*)malloc(p_temp->n_Width *
+	   p_temp->n_Height * sizeof(unsigned __int32))))
+		return;
+
+	byte* pixels = new byte[p_temp->n_Width * p_temp->n_Height * 3];
+	glReadPixels(0, 0, p_temp->n_Width, p_temp->n_Height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+	for(unsigned int i = 0; i < p_temp->n_Width * p_temp->n_Height * 3; i += 3) {		
+		p_temp->bytes[i / 3] = RGB(pixels[i], pixels[i+1], pixels[i+2]);
+	}	
+	// vytvoøí grayscale bitmapu ...
+	
+	delete[] pixels;
+
+	BMP* img = p_temp;
+	Save_TrueColor_BMP("fbo.bmp", img);
+	free(img->bytes);
+	free(img);
+}
 
 int	Save_TrueColor_BMP(char *filename, BMP *bmp)
 {
@@ -207,7 +244,7 @@ int	Save_TrueColor_BMP(char *filename, BMP *bmp)
 
 	return 1;
 }
-*/
+#endif
 
 
 /*
@@ -246,9 +283,10 @@ float* precomputeHemicubeFormFactors() {
 	unsigned int PATCHVIEW_TEX_RES = Config::PATCHVIEW_TEX_RES();
 	unsigned int PATCHVIEW_TEX_W = Config::PATCHVIEW_TEX_W();
 	unsigned int PATCHVIEW_TEX_H = Config::PATCHVIEW_TEX_H();
+	unsigned int HEMICUBES_CNT = Config::HEMICUBES_CNT();
 
 	n_hemicube_size = Config::HEMICUBE_W();
-	p_hemicube_formfactors = new float[PATCHVIEW_TEX_RES];
+	p_hemicube_formfactors = new float[PATCHVIEW_TEX_RES * HEMICUBES_CNT];
 
 	// predpocita factory pro pohled vpred a do strany
 	Calc_HemicubeFormFactors();
@@ -275,13 +313,25 @@ float* precomputeHemicubeFormFactors() {
 			p_hemicube_formfactors[i] = p_hemicube_tmp_formfactor_side[ ((HEMICUBE_H/2-1) - (y - HEMICUBE_H)) * HEMICUBE_W + (x - HEMICUBE_W) ];
 	}
 
+	// pokud bude v texture vic pohledu, zkopirovat pod sebe
+	if (HEMICUBES_CNT > 1) {
+		for (unsigned int n = 1; n < HEMICUBES_CNT; n++) {
+			for (unsigned int i = PATCHVIEW_TEX_RES * n; i < PATCHVIEW_TEX_RES * (n + 1); i++) {
+				p_hemicube_formfactors[i] = p_hemicube_formfactors[i % PATCHVIEW_TEX_RES];
+			}
+		}
+	}
 
-	/*
+
+#ifdef DO_BMP
 	// test
 	BMP* img = p_Hemicube_Test();
 	Save_TrueColor_BMP("test.bmp", img);
-	*/
+	free(img->bytes);
+	free(img);
+#endif
 	
+
 	delete[] p_hemicube_tmp_formfactor;
 	delete[] p_hemicube_tmp_formfactor_side;
 	

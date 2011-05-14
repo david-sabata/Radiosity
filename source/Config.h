@@ -22,6 +22,7 @@ class Config {
 		static unsigned int OCL_WORKITEMS_X();
 		static unsigned int OCL_WORKITEMS_Y();
 		static unsigned int SHOOTS_PER_CYCLE();
+		static unsigned int HEMICUBES_CNT();
 
 	private:
 		static bool frozen;
@@ -30,6 +31,7 @@ class Config {
 		static unsigned int oclWorkitemsX;
 		static double maxPatchArea;
 		static unsigned int shootsPerCycle;
+		static unsigned int hemicubesCount;
 
 };
 

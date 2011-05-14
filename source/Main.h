@@ -102,7 +102,8 @@ static cl_command_queue ocl_queue;
 static cl_device_id ocl_device;
 
 // CL argumenty programu
-cl_mem	ocl_arg_ids, 
+cl_mem	ocl_arg_hemicubes,
+		ocl_arg_ids, 
 		ocl_arg_energies, 
 		ocl_arg_writeindex, 
 		ocl_arg_patchview, 
@@ -113,12 +114,19 @@ unsigned int* ocl_local_work_size;
 unsigned int* ocl_global_work_size;
 
 // prostor pro data ktera lezou z kernelu; dynamicky se alokuji v InitCLObjects
+uint32_t* p_ocl_hemicubes = NULL;
 uint32_t* p_ocl_pids = NULL;
 float* p_ocl_energies = NULL;
 
 // pole souctu formfactoru pro kazdy patch ve scene, pouziva se pro zpracovani vystupu kernelu; indexovano ID patche
-static float* p_tmp_formfactors = NULL;
+float* p_tmp_formfactors = NULL;
 
+// pole radiosit o velikosti rovne poctu soucasne pocitanych hemicube; slouzi k uchovani puvodnich hodnot pri prestrelovani z vice pohledu
+Vector3f* p_tmp_radiosities = NULL;
+
+// pole ukazatelu a ID patchu s nejvetsimi energiemi
+Patch** p_emitters = NULL;
+unsigned int* p_emitters_ids = NULL;
 
 
 // citlivosti / rychlosti pohybu
@@ -194,9 +202,9 @@ static CTimer totalTimer;
 
 
 
-// seznamy orezovych a pohledovych oblasti
-int** p_viewport_list = NULL;
-int** p_scissors_list = NULL;
+// seznamy orezovych a pohledovych oblasti (pole hemicube; pro kazdou pak pole 5 smeru pohledu; pro kazdy pohled pole 4 hodnot)
+int*** p_viewport_list = NULL;
+int*** p_scissors_list = NULL;
 
 // smery pohledu pro jednotlive casti textury
 Camera::PatchLook p_patchlook_perm[] = {Camera::PATCH_LOOK_UP, Camera::PATCH_LOOK_DOWN,

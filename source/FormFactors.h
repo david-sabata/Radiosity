@@ -5,16 +5,7 @@
 #include <stdio.h>
 #include <windows.h>
 #include "Config.h"
-
-/*
-// rozmery hemicube, resp. pohledove textury
-const unsigned int HEMICUBE_W = 64;
-const unsigned int HEMICUBE_H = 64;
-
-const unsigned int PATCHVIEW_TEX_W = unsigned int(HEMICUBE_W * 2);
-const unsigned int PATCHVIEW_TEX_H = unsigned int(HEMICUBE_H * 1.5);
-const unsigned int PATCHVIEW_TEX_RES = unsigned int(PATCHVIEW_TEX_W * PATCHVIEW_TEX_H);
-*/
+#include "OpenGL30Drv.h"
 
 using namespace std;
 
@@ -29,7 +20,7 @@ using namespace std;
 float* precomputeHemicubeFormFactors();
 
 
-
+void FBO2BMP();
 
 
 struct BMP {

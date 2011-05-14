@@ -7,6 +7,7 @@ unsigned int	Config::hemicubeSide = 128;
 unsigned int	Config::oclWorkitemsX = 8;
 unsigned int	Config::shootsPerCycle = 500;
 double			Config::maxPatchArea = 0.5;
+unsigned int	Config::hemicubesCount = 20;
 
 
 // nastavovano vnitrne
@@ -40,7 +41,7 @@ void Config::freeze() {
 	_MAX_PATCH_AREA = maxPatchArea;
 
 	_OCL_WORKITEMS_X = min(oclWorkitemsX, _PATCHVIEW_TEX_W);
-	_OCL_WORKITEMS_Y = _PATCHVIEW_TEX_H;
+	_OCL_WORKITEMS_Y = _PATCHVIEW_TEX_H * hemicubesCount;
 	_OCL_SPANLENGTH = _PATCHVIEW_TEX_W / _OCL_WORKITEMS_X;
 
 
@@ -134,4 +135,8 @@ unsigned int Config::OCL_WORKITEMS_Y() {
 
 unsigned int Config::SHOOTS_PER_CYCLE() {
 	return shootsPerCycle;
+}
+
+unsigned int Config::HEMICUBES_CNT() {
+	return hemicubesCount;
 }
