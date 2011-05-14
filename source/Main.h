@@ -108,9 +108,7 @@ cl_mem	ocl_arg_ids,
 		ocl_arg_patchview, 
 		ocl_arg_ffactors;
 
-// pocet instanci programu		
-//const unsigned int ocl_local_work_size[] = { OCL_WORKITEMS_X, 8 };
-//unsigned int ocl_global_work_size[] = { OCL_WORKITEMS_X, OCL_WORKITEMS_Y };
+// pocet instanci programu
 unsigned int* ocl_local_work_size;
 unsigned int* ocl_global_work_size;
 

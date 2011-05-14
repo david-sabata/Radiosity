@@ -116,6 +116,12 @@ void ModelContainer::updateData() {
 			tmpIndices->push_back(baseOffset + 2);
 			tmpIndices->push_back(baseOffset + 3);
 
+			// overit, zda existuji sousedi
+			for (unsigned j = 0; j < 8; j++) {
+				if ((*itP)->neighbours[j] == NULL) // osetreni pro nacitani, kde jsou patche jiz rozdelene a sousedy znaji
+					(*itP)->neighbours[j] = (*itP);
+			}
+
 			// zkopirovat patch
 			tmpPatches->push_back((*itP));
 

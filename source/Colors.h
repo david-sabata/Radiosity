@@ -49,7 +49,7 @@ class Colors {
 		static uint32_t color(size_t colorIndex); // vraci GL_UNSIGNED_INT_2_10_10_10_REV barvu odpovidajici indexu
 		static size_t index(uint32_t color); // vraci index odpovidajici GL_UNSIGNED_INT_2_10_10_10_REV zabalene barve
 
-		static void smoothShadePatch(uint32_t* colors, Patch* p); // vraci barvy (v colors) pro 4 vrcholy patche tak, ze je plynule stinovany v zavislosti na sousedech
+		static void smoothShadePatch(float* colors, Patch* p); // vraci barvy (v colors) pro 4 vrcholy patche tak, ze je plynule stinovany v zavislosti na sousedech
 };
 
 

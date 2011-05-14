@@ -308,7 +308,7 @@ GLuint Shaders::getUserViewProgram() {
 		"void main()\n"
 		"{\n"
 		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
-		"    v_color = v_col / 1024.0;\n"
+		"    v_color = v_col;\n"
 		"}\n";
 
 

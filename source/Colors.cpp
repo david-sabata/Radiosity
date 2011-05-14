@@ -192,10 +192,10 @@ short* Colors::getShifts() {
 
 /**
  * @brief Vypocita nove barvy vrcholu patche ze znalosti jeho sousedu
- * @param[out] pole 4 barev (uint32_t) pro jednotlive rohy
+ * @param[out] pole 12 barevnych slozek - tri pro kazdy vrchol
  * @param[in] patch se kterym se pracuje
  */
-void Colors::smoothShadePatch(uint32_t* colors, Patch* p) {
+void Colors::smoothShadePatch(float* colors, Patch* p) {
 
 	// levy horni vrchol
 	Vector3f color_lt = p->getColor() * p->illumination;
@@ -226,8 +226,8 @@ void Colors::smoothShadePatch(uint32_t* colors, Patch* p) {
 	color_lb = color_lb / 4;
 	
 	
-	colors[0] = Colors::packColor(color_lb);
-	colors[1] = Colors::packColor(color_rb);
-	colors[2] = Colors::packColor(color_rt);
-	colors[3] = Colors::packColor(color_lt);	
+	colors[0] = color_lb.x;		colors[1] = color_lb.y;		colors[2] = color_lb.z;
+	colors[3] = color_rb.x;		colors[4] = color_rb.y;		colors[5] = color_rb.z;
+	colors[6] = color_rt.x;		colors[7] = color_rt.y;		colors[8] = color_rt.z;
+	colors[9] = color_lt.x;		colors[10] = color_lt.y;	colors[11] = color_lt.z;
 }

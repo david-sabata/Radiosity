@@ -36,18 +36,22 @@ bool InitGLObjects() {
 	}
 
 
-	// VBO pro ulozeni zobrazovanych barev patchu (iluminativni energie; barvy jsou zabalene do intu)
+	// VBO pro ulozeni zobrazovanych barev patchu (iluminativni energie)
 	glGenBuffers(1, &n_patch_color_buffer_object);
 	glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 	// na zacatku maji iluminativni energii pouze svetla
 	{
 		Patch** patches = scene.getPatches();
 		unsigned int indCnt = scene.getPatchesCount() * 4; // pocet neopakujicich se indexu
-		uint32_t* colorData = new uint32_t[indCnt];
-		for (unsigned int i=0; i < indCnt; i++) {
-			colorData[i] = Colors::packColor( patches[i/4]->illumination * patches[i/4]->getColor() ); // vychozi illuminance patchu (maji jen svetla)
+		float* colorData = new float[indCnt * 3]; // kazdy vrchol ma 3 barevne slozky
+		for (unsigned int i = 0; i < indCnt * 3; i += 3) {
+			//colorData[i] = Colors::packColor( patches[i/4]->illumination * patches[i/4]->getColor() ); // vychozi illuminance patchu (maji jen svetla)
+			Vector3f col = patches[i/12]->illumination * patches[i/12]->getColor();
+			colorData[i] = col.x;
+			colorData[i+1] = col.y;
+			colorData[i+2] = col.z;
 		}
-		glBufferData(GL_ARRAY_BUFFER, indCnt * sizeof(uint32_t), colorData, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, indCnt * 3 * sizeof(float), colorData, GL_DYNAMIC_DRAW);
 		delete[] colorData;
 	}
 
@@ -104,10 +108,11 @@ bool InitGLObjects() {
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, p_OffsetInVBO(0));
 	
-		// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva je zabalena v uintu	
+		// rekneme OpenGL odkud si ma brat data pro 1. atribut shaderu; kazda barva se sklada ze 3 floatu
 		glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
+		//glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
+		glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, p_OffsetInVBO(0));
 
 		// rekneme OpenGL odkud si ma brat souradnice textur; souradnice se sklada ze dvou hodnot	
 		glBindBuffer(GL_ARRAY_BUFFER, n_tex_buffer_object);
@@ -914,7 +919,8 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 						glBindVertexArray(n_vertex_array_object);														
 						glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
 						glEnableVertexAttribArray(1);
-						glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
+						//glVertexAttribPointer(1, 4, GL_UNSIGNED_INT_2_10_10_10_REV, false, 0, p_OffsetInVBO(0));
+						glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, p_OffsetInVBO(0));
 						glBindVertexArray(0); 
 						cout << "Switched to illuminative energies" << endl;
 					}					
@@ -1058,7 +1064,7 @@ void OnIdle(CGL30Driver &driver)
 		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
 		glViewport(0, 0, fbo->n_Width(), fbo->n_Height());		
 
-		for (int shoot = 0; shoot < Config::SHOOTS_PER_CYCLE() && computeRadiosity; shoot++) { 
+		for (unsigned int shoot = 0; shoot < Config::SHOOTS_PER_CYCLE() && computeRadiosity; shoot++) { 
 
 			// najit patch s nejvetsi energii
 			unsigned int patchId = scene.getHighestRadiosityPatchId();
@@ -1148,8 +1154,7 @@ void OnIdle(CGL30Driver &driver)
 						continue;
 					}
 
-					//Patch* p = scenePatches[p_ocl_pids[i]];
-					//p->radiosity = p->radiosity + emitter->radiosity * p_ocl_energies[i] * p->getReflectivity() * emitter->getColor();
+					// jeste nesirit, nejdriv jen sesbirat
 					p_tmp_formfactors[p_ocl_pids[i]] += p_ocl_energies[i];
 				}
 
@@ -1160,9 +1165,7 @@ void OnIdle(CGL30Driver &driver)
 				}
 				
 				// vyprazdnit pole pro dalsi pruchod
-				//fill_n(p_tmp_formfactors, scenePatchesCount, (float)0);
-				for (unsigned int xx = 0; xx < scenePatchesCount; xx++)
-					p_tmp_formfactors[xx] = 0;
+				fill_n(p_tmp_formfactors, scenePatchesCount, (float)0);				
 			} // for each interval
 
 
@@ -1171,13 +1174,14 @@ void OnIdle(CGL30Driver &driver)
 			emitter->illumination += emitter->radiosity;
 			emitter->radiosity = Vector3f(0.0f, 0.0f, 0.0f);
 				
+			/*
 			if (emitter->illumination.x > 1.0)
 				emitter->illumination.x = 1.0;
 			if (emitter->illumination.y > 1.0)
 				emitter->illumination.y = 1.0;
 			if (emitter->illumination.z > 1.0)
 				emitter->illumination.z = 1.0;	
-
+			*/
 
 			// ukoncit, jakmile energie nejnabitejsiho patche ve scene klesne pod danou hranici
 			if (lastEnergy.f_Length2() < 0.001) {
@@ -1196,20 +1200,20 @@ void OnIdle(CGL30Driver &driver)
 		fbo->Release();
 				
 		// nabindovat buffer s barvami patchu a updatovat jej
-		{				
+		{
 			glBindBuffer(GL_ARRAY_BUFFER, n_patch_color_buffer_object);
-			uint32_t* buffer = (uint32_t*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY); // mapovani obou VBO prida cca 5 FPS
+			float* buffer = (float*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY); // mapovani obou VBO prida cca 5 FPS
 
 			for (unsigned int i = 0; i < scenePatchesCount; i++) {
 				Patch* p = scenePatches[i];
 
-				uint32_t newData[4];
+				float newData[4 * 3]; // zde budou nove, vyhlazene barvy (4 vrcholy * 3 slozky)
 				Colors::smoothShadePatch(newData, p);
 
 				if (buffer != NULL)
-					memcpy(buffer + i*4, newData, 4*sizeof(uint32_t));
+					memcpy(buffer + i * 4 * 3, newData, 4 * 3 * sizeof(float));
 				else
-					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * 3 * sizeof(float), 4 * 3 * sizeof(float), newData);
 			}
 		
 			if (buffer != NULL) {
@@ -1393,7 +1397,7 @@ void LoadFromFile() {
 
 				delete[] data;
 			}
-
+			/*
 			// provest vyhlazovani, at je obraz pekny ikdyz se rad. jeste nepocita
 			{
 				Patch** scenePatches = scene.getPatches();
@@ -1408,7 +1412,7 @@ void LoadFromFile() {
 				}		
 				glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 			}
-
+			*/
 			// pokud probihal vypocet, zastavit jej
 			computeRadiosity = false;
 
