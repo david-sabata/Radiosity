@@ -38,17 +38,14 @@ const char* kernel_processHemicube =
 		"			float4 act_color = read_imagef(t_patchview, n_sampler, (int2)(x0, y));\n"
 		"			uint32_t n_act_patch = 1048576 * (uint32_t)(act_color.z * 1024) + 1024 * (uint32_t)(act_color.y * 1024) + (uint32_t)(act_color.x * 1024);\n"
 		"			if (n_act_patch == n_patch_id) {\n"
-		"				if (p_ffactors[x0]==0)\n"
-		"					f_energy = 999;"
-		"				else\n"
-		"					f_energy += p_ffactors[x0];\n" // suma energie pro jeden polygon na jedne scanline
+		"				f_energy += p_ffactors[x0];\n" // suma energie pro jeden polygon na jedne scanline
 		"				x0++;\n"
 		"			} else\n"
 		"				break;\n"
 		"		}\n"
 
 		"	   if (n_patch_id > 0) {\n"	// cerne patche nebrat - zrejme nepresne uzavreny prostor
-		"		unsigned int n_write_id = atomic_inc(p_write_index);\n"
+		"		unsigned int n_write_id = atom_inc(p_write_index);\n"
 		"		p_hemicubes[n_write_id] = y / n_height;\n"
 		"		p_ids[n_write_id] = unpack(n_patch_id + correction) - 1;\n"
 		"		p_energies[n_write_id] = f_energy;\n"	// zapsat energii do globalniho pole				

@@ -210,21 +210,21 @@ void Colors::smoothShadePatch(float* colors, Patch* p) {
 	color_rt += p->neighbours[2]->getColor() * p->neighbours[2]->illumination;
 	color_rt += p->neighbours[3]->getColor() * p->neighbours[3]->illumination;
 	color_rt = color_rt / 4;
-
+	
 	// pravy dolni vrchol
 	Vector3f color_rb = p->getColor() * p->illumination;
 	color_rb += p->neighbours[3]->getColor() * p->neighbours[3]->illumination;
 	color_rb += p->neighbours[4]->getColor() * p->neighbours[4]->illumination;
 	color_rb += p->neighbours[5]->getColor() * p->neighbours[5]->illumination;
 	color_rb = color_rb / 4;
-
+	
 	// levy dolni vrchol
 	Vector3f color_lb = p->getColor() * p->illumination;
 	color_lb += p->neighbours[5]->getColor() * p->neighbours[5]->illumination;
 	color_lb += p->neighbours[6]->getColor() * p->neighbours[6]->illumination;
 	color_lb += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;
 	color_lb = color_lb / 4;
-	
+
 	
 	colors[0] = color_lb.x;		colors[1] = color_lb.y;		colors[2] = color_lb.z;
 	colors[3] = color_rb.x;		colors[4] = color_rb.y;		colors[5] = color_rb.z;

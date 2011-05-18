@@ -552,7 +552,7 @@ bool InitCLObjects() {
 
 		
 	
-	unsigned int spanLength = PATCHVIEW_TEX_W;
+	unsigned int spanLength = PATCHVIEW_TEX_W / Config::OCL_WORKITEMS_X();
 	unsigned int hemicubesCnt = HEMICUBES_CNT;
 
 	// nastavit argumenty kernelu	
@@ -582,7 +582,7 @@ bool InitCLObjects() {
 
 	// pripravit pocty vlaken
 	ocl_local_work_size = new unsigned int[2];
-	ocl_local_work_size[0] = Config::OCL_WORKITEMS_X();		ocl_local_work_size[1] = 8;
+	ocl_local_work_size[0] = 1;/*Config::OCL_WORKITEMS_X();*/		ocl_local_work_size[1] = 256;
 	ocl_global_work_size = new unsigned int[2];
 	ocl_global_work_size[0] = Config::OCL_WORKITEMS_X();	ocl_global_work_size[1] = Config::OCL_WORKITEMS_Y();
 
@@ -768,6 +768,9 @@ int main(int n_arg_num, const char **p_arg_list)
 		if (strcmp(p_arg_list[i], "shoots") == 0) {
 			Config::setShootsPerCycle( atoi(p_arg_list[i+1]) );
 		}
+		if (strcmp(p_arg_list[i], "hemicubes") == 0) {
+			Config::setHemicubesCount( atoi(p_arg_list[i+1]) );
+		}
 	}
 
 	// parametry zname, muzeme zmrazit config a nechat jej dopocitat ostatni hodnoty
@@ -817,9 +820,9 @@ int main(int n_arg_num, const char **p_arg_list)
 		glGetIntegerv(GL_NUM_EXTENSIONS, &n_extension_num);
 		for(int i = 0; i < n_extension_num; ++ i) {
 			const char *p_s_ext_name = (const char*)glGetStringi(GL_EXTENSIONS, i); // glGetString(GL_EXTENSIONS) uz v OpenGL 3 nefrci, protoze aplikace mely historicky problemy s prilis dlouhymi stringy. ted se extensions zjistuji po jedne.
-			printf((i)? ", %s" : "%s", p_s_ext_name);
+			//printf((i)? ", %s" : "%s", p_s_ext_name);
 		}
-		printf("\n");
+		//printf("\n");
 	}
 	if(!GL_VERSION_3_0) {
 		fprintf(stderr, "error: OpenGL 3.0 not supported\n"); // OpenGL 3.0 neni podporovane
@@ -977,7 +980,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 					debugOutput = !debugOutput;
 
 				// P - zobrazit/skryt nahledove okynko pohledu z patche
-				if (n_w_param == KEY_P) 
+				if (n_w_param == KEY_P && Config::HEMICUBES_CNT() == 1) 
 					showPatchLook = !showPatchLook;
 
 				// L - spustit/pozastavit sireni energie
@@ -1252,7 +1255,7 @@ void OnIdle(CGL30Driver &driver)
 
 			// ukoncit, jakmile energie nejnabitejsiho patche ve scene klesne pod danou hranici
 			if (lastEnergy.f_Length2() < 0.001) {
-				cout << "Done in " << totalTimer.f_Time() << " seconds" << endl;				
+				cout << "Done in " << (Config::SHOOTS_PER_CYCLE() > 450 ? (timer.f_Time() - t_start) : totalTimer.f_Time()) << " seconds" << endl;				
 				computeRadiosity = false; 
 			} else if (debugOutput) {
 				cout << "Pass " << passCounter << ", the emitter had " << setprecision(10) << lastEnergy.f_Length2() << " energy" << endl;
@@ -1291,36 +1294,35 @@ void OnIdle(CGL30Driver &driver)
 			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		}
 		
-// pro zobrazovani radiativnich energii
-//#define SHOW_RADIATIVE
-#ifdef SHOW_RADIATIVE
-		// nabindovat VBO s radiativnimi energiemi a updatovat jej
-		{
-			glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
-			float* buffer = (float*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);		
+		// pro zobrazovani radiativnich energii, pouze pokud se buffery obnovuji kazdy vystrel
+		if (Config::SHOOTS_PER_CYCLE() == 1) {
+			// nabindovat VBO s radiativnimi energiemi a updatovat jej
+			{
+				glBindBuffer(GL_ARRAY_BUFFER, n_patch_radiative_buffer_object);
+				float* buffer = (float*) glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);		
 
-			for (unsigned int i = 0; i < scenePatchesCount; i++) {				
-				float newData[4 * 3]; 
-				for (unsigned int n = 0; n < 12; n += 3) {
-					newData[n] = scenePatches[i]->radiosity.x;
-					newData[n+1] = scenePatches[i]->radiosity.y;
-					newData[n+2] = scenePatches[i]->radiosity.z;
+				for (unsigned int i = 0; i < scenePatchesCount; i++) {				
+					float newData[4 * 3]; 
+					for (unsigned int n = 0; n < 12; n += 3) {
+						newData[n] = scenePatches[i]->radiosity.x;
+						newData[n+1] = scenePatches[i]->radiosity.y;
+						newData[n+2] = scenePatches[i]->radiosity.z;
+					}
+
+					if (buffer != NULL)
+						memcpy(buffer + i*4*3, newData, 4*3*sizeof(float));
+					else
+						glBufferSubData(GL_ARRAY_BUFFER, i * 4 * 3 * sizeof(float), 4 * 3 * sizeof(float), newData);
 				}
 
-				if (buffer != NULL)
-					memcpy(buffer + i*4*3, newData, 4*3*sizeof(float));
-				else
-					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * 3 * sizeof(float), 4 * 3 * sizeof(float), newData);
-			}
-
-			if (buffer != NULL) {
-				if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
-					cerr << "Error unmapping VBO" << endl;
-			}
+				if (buffer != NULL) {
+					if (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE)
+						cerr << "Error unmapping VBO" << endl;
+				}
 			
-			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer		
+				glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer		
+			}
 		}
-#endif		
 
 	} // if scenePatchesCount > 0
 
@@ -1352,6 +1354,7 @@ void OnIdle(CGL30Driver &driver)
 	
 	// pouzije shader pro uzivatelsky pohled
 	glUseProgram(n_user_program_object);
+	//glUseProgram(n_patch_program_object);
 	
 	// nastavime parametry shaderu (musi se delat pokazde kdyz se shader pouzije)
 	// uniformni parametry se mohou prubezne menit
@@ -1464,8 +1467,7 @@ void LoadFromFile() {
 					error = true;
 
 				delete[] data;
-			}
-			/*
+			}			
 			// provest vyhlazovani, at je obraz pekny ikdyz se rad. jeste nepocita
 			{
 				Patch** scenePatches = scene.getPatches();
@@ -1473,14 +1475,14 @@ void LoadFromFile() {
 				for (unsigned int i = 0; i < count; i++) {
 					Patch* p = scenePatches[i];
 			
-					uint32_t newData[4];
+					float newData[4 * 3]; // zde budou nove, vyhlazene barvy (4 vrcholy * 3 slozky)
 					Colors::smoothShadePatch(newData, p);
 
-					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * sizeof(uint32_t), 4 * sizeof(uint32_t), newData);
+					glBufferSubData(GL_ARRAY_BUFFER, i * 4 * 3 * sizeof(float), 4 * 3 * sizeof(float), newData);
 				}		
 				glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 			}
-			*/
+			
 			// pokud probihal vypocet, zastavit jej
 			computeRadiosity = false;
 

@@ -4,10 +4,10 @@ bool Config::frozen = false;
 
 // nastavovano zvenci
 unsigned int	Config::hemicubeSide = 128;
-unsigned int	Config::oclWorkitemsX = 8;
+unsigned int	Config::oclWorkitemsX = 4;
 unsigned int	Config::shootsPerCycle = 500;
 double			Config::maxPatchArea = 0.5;
-unsigned int	Config::hemicubesCount = 20;
+unsigned int	Config::hemicubesCount = 10;
 
 
 // nastavovano vnitrne
@@ -99,6 +99,17 @@ void Config::setShootsPerCycle(unsigned int n) {
 }
 
 
+/**
+ * @brief nastavuje pocet 'vystrelu' radiosity behem jednoho kresliciho cyklu
+ */
+void Config::setHemicubesCount(unsigned int n) {
+	if (frozen) {
+		cerr << "Error: Trying to modify frozen configuration" << endl;
+		return;
+	}
+
+	hemicubesCount = n;
+}
 
 
 unsigned int Config::HEMICUBE_W() {

@@ -275,7 +275,7 @@ void ModelContainer::getHighestRadiosityPatchesId(unsigned int count, Patch** p_
 
 			if (tops.size() > count) {
 				list<unsigned int>::iterator it = tops.begin();
-				for (int i = 0; i < count; i++)
+				for (unsigned int i = 0; i < count; i++)
 					it++;
 				tops.erase(it, tops.end());
 			}

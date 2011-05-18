@@ -10,6 +10,7 @@ class Config {
 		static void setOCLWorkitemsX(unsigned int n); // nastavi horizontalni pocet instanci OpenCL kernelu, ktere budou zpracovavat jeden radek textury; idealne mocnina 2
 		static void setMaxPatchArea(double n); // nastavi nejvyssi moznou plochu patche pro subdivision
 		static void setShootsPerCycle(unsigned int n); // nastavi pocet 'vystrelu' radiosity behem jednoho pruchodu kreslici smycky
+		static void setHemicubesCount(unsigned int n); // nastavi pocet patchu, ktere se vyzari a soucasne poslou do OpenCL
 
 		static void freeze(); // zmrazi objekt a naalokuje potrebne struktury
 
