@@ -2,7 +2,13 @@
 
 #include "Main.h"
 
+//std::vector<Patch*> lightPatches;
+std::vector<Vector3f> initialEnergies;
 
+unsigned int lightPatchID_min = UINT_MAX;
+unsigned int lightPatchID_max = 0;
+std::vector<unsigned int> lightPatchIDs;
+std::vector<Vector3f> lightPatchCoords, lightPatchCoordsCopy;
 
 /**
  *	@brief vytvori vsechny OpenGL objekty, potrebne pro kresleni
@@ -841,6 +847,39 @@ int main(int n_arg_num, const char **p_arg_list)
 	// nacteme globalni objekt sceny a nastavime limit velikosti patchu
 	scene.load();	
 	scene.maxPatchArea = Config::MAX_PATCH_AREA();
+
+	{
+		//lightPatches.clear();
+		Patch **patches = scene.getPatches();
+		for(unsigned int i = 0, n = scene.getPatchesCount(); i < n; ++ i) {
+			if(patches[i]->radiosity.f_Length() > 1e-3f) {
+				patches[i]->tag = 1;
+				//lightPatches.push_back(patches[i]);
+				lightPatchIDs.push_back(i);
+				if(lightPatchID_min > i)
+					lightPatchID_min = i;
+				if(lightPatchID_max < i)
+					lightPatchID_max = i;
+			} else
+				patches[i]->tag = 0;
+			initialEnergies.push_back(patches[i]->radiosity);
+		}
+		if(lightPatchID_max - lightPatchID_min + 1 != lightPatchIDs.size())
+			fprintf(stderr, "light patch id's not contiguous!\n");
+
+		const float *pv = scene.getVertices();
+		const Vector3f *pvv = (const Vector3f*)pv;
+		// get scene verts
+
+		lightPatchCoords.insert(lightPatchCoords.begin(), pvv + (4 * lightPatchID_min),
+			pvv + (4 * (lightPatchID_max + 1)));
+		lightPatchCoordsCopy.resize(lightPatchCoords.size());
+		if(lightPatchCoords.size() != 4 * lightPatchIDs.size())
+			fprintf(stderr, "light patch coords garbled!\n");
+
+		printf("have %d light patch coords to update each frame\n", lightPatchCoords.size());
+	}
+	// hack (collect light patches)
 	
 	// vyrobime objekty OpenGL, nutne ke kresleni
 	if(!InitGLObjects()) {
@@ -1081,7 +1120,8 @@ void handleActiveKeys() {
 }
 
 #define MAX_MARKS 100
-#define MARK(n) do { if(n_marker_used < MAX_MARKS) { p_marker_name_list[n_marker_used] = n; p_marker[n_marker_used] = timer.f_Time(); ++ n_marker_used; } } while(false)
+//#define MARK(n) do { if(n_marker_used < MAX_MARKS) { p_marker_name_list[n_marker_used] = n; p_marker[n_marker_used] = timer.f_Time(); ++ n_marker_used; } } while(false)
+#define MARK(n) do {} while(false)
 
 /**
  *	@brief tato funkce se vola ve smycce pokazde kdyz nejsou zadne nove zpravy; lze vyuzit ke kresleni animace
@@ -1122,6 +1162,29 @@ void OnIdle(CGL30Driver &driver)
 	// v pripade, ze scena neni nactena, nesnazit se renderovat do textury
 	// ani pocitat radiozitu
 	if (computeRadiosity && scenePatchesCount > 0) {
+		{
+			Patch **patches = scene.getPatches();
+			for(unsigned int i = 0, n = scene.getPatchesCount(); i < n; ++ i) {
+				patches[i]->radiosity = initialEnergies[i];
+				patches[i]->illumination = Vector3f(0, 0, 0);
+			}
+		}
+		// clear the energies
+
+		float f_light_movement_speed = 0.7f;
+		float f_light_movement_amp = 1.25f;
+		Vector3f v_light_offset(Vector3f(float(sin(t_start * f_light_movement_speed)), 0,
+			float(cos(t_start * f_light_movement_speed))) * f_light_movement_amp);
+
+		for(size_t i = 0, n = lightPatchCoords.size(); i < n; ++ i)
+			lightPatchCoordsCopy[i] = lightPatchCoords[i] + v_light_offset;
+		// transform new light position
+
+		glBindBuffer(GL_ARRAY_BUFFER, n_vertex_buffer_object);
+		glBufferSubData(GL_ARRAY_BUFFER, lightPatchID_min * sizeof(float) * 3 * 4,
+			lightPatchCoordsCopy.size() * sizeof(float) * 3, (const float*)&lightPatchCoordsCopy[0]);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		// update light patch
 
 		MARK("starting up");
 
@@ -1130,11 +1193,11 @@ void OnIdle(CGL30Driver &driver)
 		fbo->Bind();
 		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, n_patchlook_texture);
 		glViewport(0, 0, fbo->n_Width(), fbo->n_Height());
-		glFinish(); // remove me		
+		//glFinish(); // remove me		
 
 		MARK("FBO bound");
 
-		for (unsigned int shoot = 0; shoot < Config::SHOOTS_PER_CYCLE() && computeRadiosity; shoot++) { 
+		for (unsigned int shoot = 0; /*shoot < Config::SHOOTS_PER_CYCLE() &&*/ computeRadiosity; shoot++) { 
 
 			// najit patche s nejvetsi energii
 			scene.getHighestRadiosityPatchesId(Config::HEMICUBES_CNT(), p_emitters, p_emitters_ids);
@@ -1147,7 +1210,7 @@ void OnIdle(CGL30Driver &driver)
 				// vycistit fbo
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 			
 				glEnable(GL_SCISSOR_TEST);
-				glFinish(); // remove me
+//glFinish(); // remove me
 
 				MARK("glClear");
 
@@ -1173,10 +1236,15 @@ void OnIdle(CGL30Driver &driver)
 		
 							// modelview
 							Matrix4f t_modelview;
-							t_modelview.Identity();				
+							t_modelview.Identity();	
 
-							// vynasobit pohledem kamery patche
-							patchCam.lookFromPatch(p_emitters[hi], dir);
+							if(p_emitters[hi]->tag == 1) {
+								// vynasobit pohledem kamery patche
+								patchCam.lookFromPatch(p_emitters[hi], dir, v_light_offset);
+							} else {
+								// vynasobit pohledem kamery patche
+								patchCam.lookFromPatch(p_emitters[hi], dir);
+							}
 							t_modelview *= patchCam.GetMatrix();
 
 							// matice pohledu kamery
@@ -1199,7 +1267,7 @@ void OnIdle(CGL30Driver &driver)
 
 				glDisable(GL_SCISSOR_TEST);
 
-				glFinish(); // remove me
+//glFinish(); // remove me
 				MARK("hemicubes finished");
 					
 				//FBO2BMP();
@@ -1211,7 +1279,7 @@ void OnIdle(CGL30Driver &driver)
 				//glFinish(); // nutne pro sync
 				error |= clEnqueueAcquireGLObjects(ocl_queue, 1, &ocl_arg_patchview, 0, NULL, NULL);
 				
-				clFinish(ocl_queue); // remove me
+				//clFinish(ocl_queue); // remove me
 				MARK("clEnqueueAcquireGLObjects");
 
 				// vynulovat index na ktery se zapisuje - nutne v kazde iteraci!
@@ -1225,7 +1293,7 @@ void OnIdle(CGL30Driver &driver)
 				error = clEnqueueNDRangeKernel(ocl_queue, ocl_kernel, 2, NULL, ocl_global_work_size, ocl_local_work_size, 0, NULL, NULL);
 				_ASSERT(error == CL_SUCCESS);
 
-				clFinish(ocl_queue); // remove me
+				//clFinish(ocl_queue); // remove me
 				MARK("clEnqueueNDRangeKernel");
 
 				// zjistit kolik polygonu*instanci se ulozilo (pocet je vzdy ruzny v zavislosti na pohledu a rozlozeni work-items)
@@ -1308,11 +1376,15 @@ void OnIdle(CGL30Driver &driver)
 
 		} // for 'shoot' times
 
+		if(!computeRadiosity)
+			computeRadiosity = true;
+		// hack - compute radiosity in the next frame as well
+
 		// uvolnit fbo
 		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
 		fbo->Release();
 		
-		glFinish(); // remove me
+		//glFinish(); // remove me
 		MARK("FBO release");
 				
 		// nabindovat buffer s barvami patchu a updatovat jej
@@ -1340,7 +1412,7 @@ void OnIdle(CGL30Driver &driver)
 			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer
 		}
 		
-		glFinish(); // remove me
+		//glFinish(); // remove me
 		MARK("VBO update");
 		
 // pro zobrazovani radiativnich energii

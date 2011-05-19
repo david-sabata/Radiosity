@@ -16,6 +16,41 @@ void Camera::Reset() {
 }
 
 
+void Camera::lookFromPatch(Patch* p, PatchLook dir, Vector3f v_offset) {
+	eye = p->getCenter() + v_offset;
+
+	Vector3f normal = p->getNormal(); // vychozi normala - smer pohledu FRONT
+	Vector3f patchUp = p->getUp();	// pomocny UP vektor patche
+
+	// podle smeru pohledu upravit normalu a up vektor
+	switch (dir) {
+		case PATCH_LOOK_FRONT:
+			target = normal;
+			up = patchUp;
+			break;
+
+		case PATCH_LOOK_UP:
+			target = patchUp;
+			up = -normal;
+			break;
+
+		case PATCH_LOOK_DOWN:
+			target = -patchUp;
+			up = normal;
+			break;
+
+		case PATCH_LOOK_LEFT:
+			target = -normal.v_Cross(patchUp);
+			up = patchUp;
+			break;
+
+		case PATCH_LOOK_RIGHT:
+			target = normal.v_Cross(patchUp);
+			up = patchUp;
+			break;
+	}
+}
+
 void Camera::lookFromPatch(Patch* p, PatchLook dir) {
 	eye = p->getCenter();
 
