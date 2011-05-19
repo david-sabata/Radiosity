@@ -196,7 +196,35 @@ short* Colors::getShifts() {
  * @param[in] patch se kterym se pracuje
  */
 void Colors::smoothShadePatch(float* colors, Patch* p) {
-
+#if 1
+	// levy horni vrchol
+	Vector3f color_lt = p->getColor() * (p->illumination + p->radiosity);
+	color_lt += p->neighbours[7]->getColor() * (p->neighbours[7]->illumination + p->neighbours[7]->radiosity);	
+	color_lt += p->neighbours[0]->getColor() * (p->neighbours[0]->illumination + p->neighbours[0]->radiosity);
+	color_lt += p->neighbours[1]->getColor() * (p->neighbours[1]->illumination + p->neighbours[1]->radiosity);
+	color_lt = color_lt / 4;
+	
+	// pravy horni vrchol
+	Vector3f color_rt = p->getColor() * (p->illumination + p->radiosity);
+	color_rt += p->neighbours[1]->getColor() * (p->neighbours[1]->illumination + p->neighbours[1]->radiosity);
+	color_rt += p->neighbours[2]->getColor() * (p->neighbours[2]->illumination + p->neighbours[2]->radiosity);
+	color_rt += p->neighbours[3]->getColor() * (p->neighbours[3]->illumination + p->neighbours[3]->radiosity);
+	color_rt = color_rt / 4;
+	
+	// pravy dolni vrchol
+	Vector3f color_rb = p->getColor() * (p->illumination + p->radiosity);
+	color_rb += p->neighbours[3]->getColor() * (p->neighbours[3]->illumination + p->neighbours[3]->radiosity);
+	color_rb += p->neighbours[4]->getColor() * (p->neighbours[4]->illumination + p->neighbours[4]->radiosity);
+	color_rb += p->neighbours[5]->getColor() * (p->neighbours[5]->illumination + p->neighbours[5]->radiosity);
+	color_rb = color_rb / 4;												  
+																			  
+	// levy dolni vrchol													  
+	Vector3f color_lb = p->getColor() * (p->illumination + p->radiosity);	  
+	color_lb += p->neighbours[5]->getColor() * (p->neighbours[5]->illumination + p->neighbours[5]->radiosity);
+	color_lb += p->neighbours[6]->getColor() * (p->neighbours[6]->illumination + p->neighbours[6]->radiosity);
+	color_lb += p->neighbours[7]->getColor() * (p->neighbours[7]->illumination + p->neighbours[7]->radiosity);
+	color_lb = color_lb / 4;
+#else
 	// levy horni vrchol
 	Vector3f color_lt = p->getColor() * p->illumination;
 	color_lt += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;	
@@ -224,6 +252,7 @@ void Colors::smoothShadePatch(float* colors, Patch* p) {
 	color_lb += p->neighbours[6]->getColor() * p->neighbours[6]->illumination;
 	color_lb += p->neighbours[7]->getColor() * p->neighbours[7]->illumination;
 	color_lb = color_lb / 4;
+#endif
 
 	
 	colors[0] = color_lb.x;		colors[1] = color_lb.y;		colors[2] = color_lb.z;

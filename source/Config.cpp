@@ -3,7 +3,7 @@
 bool Config::frozen = false;
 
 // nastavovano zvenci
-unsigned int	Config::hemicubeSide = 128;
+unsigned int	Config::hemicubeSide = 16;
 unsigned int	Config::oclWorkitemsX = 4;
 unsigned int	Config::shootsPerCycle = 500;
 double			Config::maxPatchArea = 0.5;

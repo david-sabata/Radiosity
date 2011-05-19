@@ -152,7 +152,8 @@ GLuint Shaders::getPreviewProgram() {
 		"uniform sampler2D n_tex;\n"
 		"\n"
 		"void main()\n"
-		"{\n"					
+		"{\n"			
+		/*
 		"    vec4 tex_color = vec4(0.0);"
 		"    if(v_texcoord.y >= 0.25 && v_texcoord.y <= 0.75) {"
 		"        if(v_texcoord.x < 0.25)"
@@ -165,8 +166,9 @@ GLuint Shaders::getPreviewProgram() {
 		"        tex_color = texture(n_tex, (v_texcoord + vec2(-.25, 0)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.5, 0.66667));"
 		"    else if(v_texcoord.y > 0.75 && v_texcoord.x >= 0.25 && v_texcoord.x <= 0.75)"
 		"        tex_color = texture(n_tex, (v_texcoord + vec2(-0.25, -.75)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.0, 0.66667));"
-		"    else discard;"			
-		//"    vec4 tex_color = texture(n_tex, v_texcoord);\n"
+		"    else discard;"	
+		*/
+		"    vec4 tex_color = texture(n_tex, v_texcoord);\n"
 		/*		
 		"    vec4 tex_color = texture(n_tex, v_texcoord) * .5;//vec4(0.0);\n" // precte texturu krabice
 		"    float f_tex_length = length(v_normal_tex);\n"

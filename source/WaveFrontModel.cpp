@@ -13,7 +13,7 @@ WaveFrontModel::WaveFrontModel(string filename) {
  * @todo normaly? textury? groupy?
  */
 bool WaveFrontModel::parse(string filename) {	
-	ifstream f(filename, ifstream::in);
+	ifstream f(filename.c_str(), ifstream::in);
 
 	// pro nacitani jednotlivych radku
 	string buffer;

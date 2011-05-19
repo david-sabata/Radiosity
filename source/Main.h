@@ -172,7 +172,7 @@ bool debugOutput = false;
 bool b_draw_radiative = false;
 
 // spustit/pozastavit vypocet (L)
-bool computeRadiosity = false;
+bool computeRadiosity = true;
 
 // zobrazit pouze wireframe? (F)
 bool wireframe = false;
