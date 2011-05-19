@@ -15,7 +15,7 @@ std::vector<Vector3f> lightPatchCoords, lightPatchCoordsCopy;
  *	@return vraci true pri uspechu, false pri neuspechu
  */
 bool InitGLObjects() {		
-	glEnable(GL_CULL_FACE);
+	glEnable(GL_CULL_FACE);	
 
 	// vyrobime buffer objekt, do ktereho zkopirujeme geometrii naseho modelu 
 	// (do jednoho bufferu ulozime vsechny souradnice, tzn. texturovaci / normaly / barvy / pozice, atp. 
@@ -258,6 +258,11 @@ bool InitGLObjects() {
 	n_user_program_object = Shaders::getUserViewProgram();		
 	// najde cislo parametru shaderu podle jeho jmena
 	n_user_mvp_matrix_uniform = glGetUniformLocation(n_user_program_object, "t_modelview_projection_matrix");
+	
+	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro uzivatelsky pohled
+	n_wireframe_program = Shaders::getWireframeProgram();
+	// najde cislo parametru shaderu podle jeho jmena
+	n_wireframe_mvp_matrix_uniform = glGetUniformLocation(n_wireframe_program, "t_modelview_projection_matrix");
 	
 
 	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro pohled z patche
@@ -871,8 +876,7 @@ int main(int n_arg_num, const char **p_arg_list)
 		const Vector3f *pvv = (const Vector3f*)pv;
 		// get scene verts
 
-		lightPatchCoords.insert(lightPatchCoords.begin(), pvv + (4 * lightPatchID_min),
-			pvv + (4 * (lightPatchID_max + 1)));
+		lightPatchCoords.insert(lightPatchCoords.begin(), pvv + (4 * lightPatchID_min),	pvv + (4 * (lightPatchID_max + 1)));
 		lightPatchCoordsCopy.resize(lightPatchCoords.size());
 		if(lightPatchCoords.size() != 4 * lightPatchIDs.size())
 			fprintf(stderr, "light patch coords garbled!\n");
@@ -996,7 +1000,7 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 						wireframe = false;
 					} else {
 						glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
-						wireframe = true;
+						wireframe = true;						
 					}
 				}
 
@@ -1039,6 +1043,45 @@ LRESULT CALLBACK WndProc(HWND h_wnd, UINT n_msg, WPARAM n_w_param, LPARAM n_l_pa
 					} else {
 						cout << "Light emitting paused" << endl;
 					}
+				}
+
+				// T - prepnout kameru do obihajiciho rezimu
+				if (n_w_param == 0x54) {
+					cam.toggleObserve();
+				}
+
+				// G - pohybovat svetlem
+				if (n_w_param == 0x47) {					
+					moveLight = !moveLight;
+					if (moveLight)
+						cout << "moving light!" << endl;
+					else
+						cout << "not moving light!" << endl;
+				}
+
+				// C - camera dump
+				if (n_w_param == 0x43) {
+					cam.DebugDump();
+				}				
+
+				// X - screenshot do souboru
+				if (n_w_param == 0x58) {
+					screenShot = true;
+					cout << "taking a screenshot!" << endl;
+				}
+
+				// sipka dolu - snizeni matrixoveho casu
+				if (n_w_param == 0x28) {
+					matrixTime -= matrixTimeD;
+					computeRadiosity = true;
+					cout << "matrix time is now " << matrixTime << endl;
+				}
+
+				// sipka nahoru - zvyseni matrixoveho casu
+				if (n_w_param == 0x26) {
+					matrixTime += matrixTimeD;
+					computeRadiosity = true;
+					cout << "matrix time is now " << matrixTime << endl;
 				}
 
 				return 0;
@@ -1171,20 +1214,28 @@ void OnIdle(CGL30Driver &driver)
 		}
 		// clear the energies
 
-		float f_light_movement_speed = 0.7f;
-		float f_light_movement_amp = 1.25f;
-		Vector3f v_light_offset(Vector3f(float(sin(t_start * f_light_movement_speed)), 0,
-			float(cos(t_start * f_light_movement_speed))) * f_light_movement_amp);
+		Vector3f v_light_offset(0, 0, 0);
+		if (moveLight || matrixTime > 0) {
+			float f_light_movement_speed = 0.7f;
+			float f_light_movement_amp = 1.25f;
+			/*
+			v_light_offset = Vector3f(Vector3f(float(sin(t_start * f_light_movement_speed)), 0,
+				float(cos(t_start * f_light_movement_speed))) * f_light_movement_amp);
+			*/
+			v_light_offset = Vector3f(Vector3f(float(sin(matrixTime * f_light_movement_speed)), 0,
+				float(cos(matrixTime * f_light_movement_speed))) * f_light_movement_amp);
 
-		for(size_t i = 0, n = lightPatchCoords.size(); i < n; ++ i)
-			lightPatchCoordsCopy[i] = lightPatchCoords[i] + v_light_offset;
-		// transform new light position
+			for(size_t i = 0, n = lightPatchCoords.size(); i < n; ++ i)
+				lightPatchCoordsCopy[i] = lightPatchCoords[i] + v_light_offset;
+			// transform new light position
 
-		glBindBuffer(GL_ARRAY_BUFFER, n_vertex_buffer_object);
-		glBufferSubData(GL_ARRAY_BUFFER, lightPatchID_min * sizeof(float) * 3 * 4,
-			lightPatchCoordsCopy.size() * sizeof(float) * 3, (const float*)&lightPatchCoordsCopy[0]);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		// update light patch
+			glBindBuffer(GL_ARRAY_BUFFER, n_vertex_buffer_object);
+			glBufferSubData(GL_ARRAY_BUFFER, lightPatchID_min * sizeof(float) * 3 * 4,
+				lightPatchCoordsCopy.size() * sizeof(float) * 3, (const float*)&lightPatchCoordsCopy[0]);
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			// update light patch
+		}
+		
 
 		MARK("starting up");
 
@@ -1210,7 +1261,7 @@ void OnIdle(CGL30Driver &driver)
 				// vycistit fbo
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 			
 				glEnable(GL_SCISSOR_TEST);
-//glFinish(); // remove me
+				//glFinish(); // remove me
 
 				MARK("glClear");
 
@@ -1267,7 +1318,7 @@ void OnIdle(CGL30Driver &driver)
 
 				glDisable(GL_SCISSOR_TEST);
 
-//glFinish(); // remove me
+				//glFinish(); // remove me
 				MARK("hemicubes finished");
 					
 				//FBO2BMP();
@@ -1352,22 +1403,24 @@ void OnIdle(CGL30Driver &driver)
 
 
 			// zdroje se vyzarily
-			Vector3f lastEnergy; // posledni vyzarena energie
+			Vector3f lastEnergy(0.0f, 0.0f, 0.0f); // posledni vyzarena energie
 			for (unsigned int hi = 0; hi < Config::HEMICUBES_CNT(); hi++) {
 				if (p_emitters[hi] == NULL)
 					continue;
 
-				lastEnergy = p_emitters[hi]->radiosity;
+				if (p_emitters[hi]->radiosity.f_Length() > lastEnergy.f_Length())
+					lastEnergy = p_emitters[hi]->radiosity;
+
 				p_emitters[hi]->illumination += p_tmp_radiosities[hi];
 				p_emitters[hi]->radiosity -= p_tmp_radiosities[hi];
 			}
 
 			// ukoncit, jakmile energie nejnabitejsiho patche ve scene klesne pod danou hranici
 			if (lastEnergy.f_Length() < 0.1) {
-				cout << "Done in " << (timer.f_Time() - t_start) << " seconds, " << (shoot * Config::HEMICUBES_CNT()) << " cycles" << endl;				
+				cout << "Done in " << (timer.f_Time() - t_start) << " seconds, " << (shoot * Config::HEMICUBES_CNT()) << " cycles, last energy " << lastEnergy.f_Length() << endl;
 				computeRadiosity = false; 
 			} else if (debugOutput) {
-				cout << "Pass " << passCounter << ", the emitter had " << setprecision(10) << lastEnergy.f_Length2() << " energy" << endl;
+				cout << "Pass " << passCounter << ", the emitter had " << setprecision(10) << lastEnergy.f_Length() << " energy" << endl;
 			}	
 
 			MARK("emitters update");
@@ -1376,9 +1429,11 @@ void OnIdle(CGL30Driver &driver)
 
 		} // for 'shoot' times
 
-		if(!computeRadiosity)
-			computeRadiosity = true;
-		// hack - compute radiosity in the next frame as well
+		if (moveLight) {
+			if(!computeRadiosity)
+				computeRadiosity = true;
+			// hack - compute radiosity in the next frame as well
+		}		
 
 		// uvolnit fbo
 		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
@@ -1413,10 +1468,10 @@ void OnIdle(CGL30Driver &driver)
 		}
 		
 		//glFinish(); // remove me
-		MARK("VBO update");
-		
+		MARK("VBO update");		
+
 // pro zobrazovani radiativnich energii
-#define SHOW_RADIATIVE
+//#define SHOW_RADIATIVE
 #ifdef SHOW_RADIATIVE
 		// nabindovat VBO s radiativnimi energiemi a updatovat jej
 		{
@@ -1444,8 +1499,7 @@ void OnIdle(CGL30Driver &driver)
 			
 			glBindBuffer(GL_ARRAY_BUFFER, 0); // odbindovat buffer		
 		}
-#endif		
-
+#endif			
 	} // if scenePatchesCount > 0
 
 	// ***********************************************************************************
@@ -1487,7 +1541,14 @@ void OnIdle(CGL30Driver &driver)
 	}
 
 	// vykresli scenu
-	DrawScene(); 
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	//DrawScene(); 	
+	
+	// vykresli wireframe
+	glUseProgram(n_wireframe_program);
+	//glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+	DrawScene();
+	
 
 	if (showPatchLook) {
 		// pouzije shader pro nahledovy kriz
@@ -1505,6 +1566,22 @@ void OnIdle(CGL30Driver &driver)
 
 
 	// ***********************************************************************************
+
+	if (screenShot) {
+		Viewport2BMP("vp.bmp");
+		screenShot = false;
+	}
+
+	if (matrixTime > 0 && matrixTime < 10) {
+		ostringstream oss;
+		unsigned int t = int(floor(matrixTime * 10));
+		oss << "snapshot-" << t << ".bmp";
+			
+		Viewport2BMP(oss.str());
+		matrixTime += matrixTimeD;
+		computeRadiosity = true;
+	}
+
 
 	// preklopi buffery, zobrazi co jsme nakreslili
 	driver.Blit(); 

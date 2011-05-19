@@ -13,6 +13,10 @@ GLuint Shaders::n_preview_vertex_shader = 0;
 GLuint Shaders::n_preview_fragment_shader = 0;
 GLuint Shaders::n_preview_program_object = 0;
 
+GLuint Shaders::n_wireframe_vertex_shader = 0;
+GLuint Shaders::n_wireframe_fragment_shader = 0;
+GLuint Shaders::n_wireframe_program_object = 0;
+
 /**
  *	@brief zkontroluje zda byl shader spravne zkompilovan, tiskne chyby do stderr
  *	@param[in] n_shader_object je id shaderu
@@ -118,6 +122,10 @@ void Shaders::cleanup() {
 	glDeleteShader(n_preview_vertex_shader);
 	glDeleteShader(n_preview_fragment_shader);
 	glDeleteProgram(n_preview_program_object);
+
+	glDeleteShader(n_wireframe_vertex_shader);
+	glDeleteShader(n_wireframe_fragment_shader);
+	glDeleteProgram(n_wireframe_program_object);
 }
 
 
@@ -356,4 +364,69 @@ GLuint Shaders::getUserViewProgram() {
 		return false;
 	else
 		return n_user_program_object;
+}
+
+
+/**
+ * Vraci program (zkompilovane shadery) pro renderovani wireframe pohledu
+ */
+GLuint Shaders::getWireframeProgram() {
+	const char *p_s_vertex_shader =
+		"#version 330\n"		
+		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
+		"in vec3 v_col;\n" // barva vrcholu
+		"\n"
+		"uniform mat4 t_modelview_projection_matrix;\n" // parametr shaderu - transformacni matice
+		"\n"
+		"out vec3 v_color;\n"		
+		"\n"
+		"void main()\n"
+		"{\n"
+		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
+		"    v_color = v_col;\n"
+		"}\n";
+
+
+	const char *p_s_fragment_shader =
+		"#version 330\n"
+		"in vec3 v_color;\n" // vstupy z vertex shaderu
+		"\n"
+		"out vec4 frag_color;\n" // vystup do framebufferu
+		"\n"
+		"void main()\n"
+		"{\n"
+		"    frag_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);\n"
+		"}\n";
+
+
+	// zkompiluje vertex / fragment shader, pripoji je k programu
+	n_wireframe_vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(n_wireframe_vertex_shader, 1, &p_s_vertex_shader, NULL);
+	glCompileShader(n_wireframe_vertex_shader);
+	if(!CheckShader(n_wireframe_vertex_shader, "vertex shader"))
+		return false;
+
+	n_wireframe_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(n_wireframe_fragment_shader, 1, &p_s_fragment_shader, NULL);
+	glCompileShader(n_wireframe_fragment_shader);
+	if(!CheckShader(n_wireframe_fragment_shader, "fragment shader"))
+		return false;
+	
+	n_wireframe_program_object = glCreateProgram();
+	glAttachShader(n_wireframe_program_object, n_wireframe_vertex_shader);
+	glAttachShader(n_wireframe_program_object, n_wireframe_fragment_shader);
+	
+	// nabinduje atributy (propojeni mezi obsahem VBO a vstupem do vertex shaderu)
+	glBindAttribLocation(n_wireframe_program_object, 0, "v_pos");
+	glBindAttribLocation(n_wireframe_program_object, 1, "v_col");
+	
+	// nabinduje vystupni promenou (propojeni mezi framebufferem a vystupem fragment shaderu)
+	glBindFragDataLocation(n_wireframe_program_object, 0, "frag_color");
+	
+	// slinkuje program
+	glLinkProgram(n_wireframe_program_object);
+	if(!CheckProgram(n_wireframe_program_object, "program"))
+		return false;
+	else
+		return n_wireframe_program_object;
 }

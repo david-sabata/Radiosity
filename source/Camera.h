@@ -1,8 +1,10 @@
 #pragma once
 
+#include <stdint.h>
 #include "Vector.h"
 #include "Transform.h"
 #include "Patch.h"
+#include "Timer.h"
 
 class Camera {
 
@@ -12,6 +14,12 @@ class Camera {
 		Vector3f up;			// up vektor kamery
 		float angle_horiz;
 		float angle_vert;
+
+		bool isObserving;
+		Vector3f observeCenter;
+		float observeRadius;
+		float observeSpeed;
+		CTimer observeTimer;
 		
 	public:
 
@@ -31,6 +39,8 @@ class Camera {
 		void Aim(float vertical_angle, float horizontal_angle);
 		Matrix4f GetMatrix();
 		void DebugDump();
+
+		void toggleObserve();
 
 };
 

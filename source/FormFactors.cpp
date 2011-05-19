@@ -138,6 +138,7 @@ BMP *p_Hemicube_Test()
 
 	return p_temp;
 }
+#endif
 
 
 void FBO2BMP() {
@@ -157,7 +158,7 @@ void FBO2BMP() {
 	byte* pixels = new byte[p_temp->n_Width * p_temp->n_Height * 3];
 	glReadPixels(0, 0, p_temp->n_Width, p_temp->n_Height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
 
-	for(unsigned int i = 0; i < p_temp->n_Width * p_temp->n_Height * 3; i += 3) {		
+	for(int i = 0; i < p_temp->n_Width * p_temp->n_Height * 3; i += 3) {		
 		p_temp->bytes[i / 3] = RGB(pixels[i], pixels[i+1], pixels[i+2]);
 	}	
 	// vytvoøí grayscale bitmapu ...
@@ -170,7 +171,56 @@ void FBO2BMP() {
 	free(img);
 }
 
-int	Save_TrueColor_BMP(char *filename, BMP *bmp)
+void Viewport2BMP(string filename) {	
+	GLint params[4];
+	glGetIntegerv(GL_VIEWPORT, params);
+
+	int windowWidth = params[2];
+	int windowHeight = params[3];
+	
+	cout << "vp " << params[2] << " x " << params[3] << endl;
+
+	byte* bmpBuffer = (byte*)malloc(windowWidth*windowHeight*3);
+	if (!bmpBuffer)
+	return;
+
+	glReadPixels((GLint)0, (GLint)0, (GLint)windowWidth-1, (GLint)windowHeight-1, GL_BGR, GL_UNSIGNED_BYTE, bmpBuffer);
+
+	FILE *filePtr = fopen(filename.c_str(), "wb");
+	if (!filePtr)
+		return;
+
+	BITMAPFILEHEADER bitmapFileHeader;
+	BITMAPINFOHEADER bitmapInfoHeader;
+
+	bitmapFileHeader.bfType = 0x4D42; //"BM"
+	bitmapFileHeader.bfSize = windowWidth*windowHeight*3;
+	bitmapFileHeader.bfReserved1 = 0;
+	bitmapFileHeader.bfReserved2 = 0;
+	bitmapFileHeader.bfOffBits =
+	sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+
+	bitmapInfoHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bitmapInfoHeader.biWidth = windowWidth-1;
+	bitmapInfoHeader.biHeight = windowHeight-1;
+	bitmapInfoHeader.biPlanes = 1;
+	bitmapInfoHeader.biBitCount = 24;
+	bitmapInfoHeader.biCompression = BI_RGB;
+	bitmapInfoHeader.biSizeImage = 0;
+	bitmapInfoHeader.biXPelsPerMeter = 0; // ?
+	bitmapInfoHeader.biYPelsPerMeter = 0; // ?
+	bitmapInfoHeader.biClrUsed = 0;
+	bitmapInfoHeader.biClrImportant = 0;
+
+	fwrite(&bitmapFileHeader, sizeof(BITMAPFILEHEADER), 1, filePtr);
+	fwrite(&bitmapInfoHeader, sizeof(BITMAPINFOHEADER), 1, filePtr);
+	fwrite(bmpBuffer, windowWidth*windowHeight*3, 1, filePtr);
+	fclose(filePtr);
+
+	free(bmpBuffer);
+}
+
+int	Save_TrueColor_BMP(const char *filename, BMP *bmp)
 {
 	unsigned long ByteCount;
 	BITMAPFILEHEADER bmfh;
@@ -244,7 +294,7 @@ int	Save_TrueColor_BMP(char *filename, BMP *bmp)
 
 	return 1;
 }
-#endif
+
 
 
 /*

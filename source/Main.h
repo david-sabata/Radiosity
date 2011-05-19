@@ -47,8 +47,10 @@ const unsigned int OCL_SPANLENGTH = PATCHVIEW_TEX_W / OCL_WORKITEMS_X;
 // parametry okna
 static const char *p_s_window_name = "Radiosity Renderer";
 static const char *p_s_class_name = "my_wndclass";
-static int n_width = 800;
-static int n_height = 600;
+//static int n_width = 800;
+//static int n_height = 600;
+static int n_width = 710;
+static int n_height = 703;
 
 // flag pro vyskoceni ze smycky zprav
 static bool b_running = true;
@@ -80,6 +82,10 @@ static GLuint*	n_color_array_object = NULL;
 static GLuint	n_user_program_object, 
 				n_user_mvp_matrix_uniform, 
 				n_box_sampler_uniform;
+
+// objekt shaderu pro kresleni uzivatelskeho pohledu ve wireframe
+static GLuint	n_wireframe_program,
+				n_wireframe_mvp_matrix_uniform;
 
 // objekt shaderu pro pohled z patche a jeho parametr
 static GLuint	n_patch_program_object, 
@@ -238,3 +244,8 @@ void LoadFromFile();
 int step = 0; // !!!
 unsigned long lookFromPatch = 0; // !!!
 Camera::PatchLook lookFromPatchDir = Camera::PATCH_LOOK_FRONT; // !!!
+bool moveLight = false;
+bool screenShot = false;
+
+float matrixTime = 0;
+const float matrixTimeD = 0.1f;

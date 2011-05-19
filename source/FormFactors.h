@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string>
 #include <windows.h>
 #include "Config.h"
 #include "OpenGL30Drv.h"
@@ -21,6 +22,7 @@ float* precomputeHemicubeFormFactors();
 
 
 void FBO2BMP();
+void Viewport2BMP(string filename);
 
 
 struct BMP {
@@ -28,4 +30,4 @@ struct BMP {
     int n_Width, n_Height;
 };
 
-int	Save_TrueColor_BMP(char *filename, BMP *bmp);
+int	Save_TrueColor_BMP(const char *filename, BMP *bmp);
