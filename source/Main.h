@@ -85,7 +85,8 @@ static GLuint	n_user_program_object,
 
 // objekt shaderu pro kresleni uzivatelskeho pohledu ve wireframe
 static GLuint	n_wireframe_program,
-				n_wireframe_mvp_matrix_uniform;
+				n_wireframe_mvp_matrix_uniform,
+				n_wireframe_projection_matrix_uniform;
 
 // objekt shaderu pro pohled z patche a jeho parametr
 static GLuint	n_patch_program_object, 
@@ -178,7 +179,7 @@ bool debugOutput = false;
 bool b_draw_radiative = false;
 
 // spustit/pozastavit vypocet (L)
-bool computeRadiosity = true;
+bool computeRadiosity = false;
 
 // zobrazit pouze wireframe? (F)
 bool wireframe = false;

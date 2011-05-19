@@ -53,7 +53,7 @@ bool InitGLObjects() {
 		float* colorData = new float[indCnt * 3]; // kazdy vrchol ma 3 barevne slozky
 		for (unsigned int i = 0; i < indCnt * 3; i += 3) {
 			//colorData[i] = Colors::packColor( patches[i/4]->illumination * patches[i/4]->getColor() ); // vychozi illuminance patchu (maji jen svetla)
-			Vector3f col = patches[i/12]->illumination * patches[i/12]->getColor();
+			Vector3f col = (patches[i/12]->illumination + Vector3f(0.8f, 0.8f, 0.8f)) * patches[i/12]->getColor();
 			colorData[i] = col.x;
 			colorData[i+1] = col.y;
 			colorData[i+2] = col.z;
@@ -262,8 +262,8 @@ bool InitGLObjects() {
 	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro uzivatelsky pohled
 	n_wireframe_program = Shaders::getWireframeProgram();
 	// najde cislo parametru shaderu podle jeho jmena
-	n_wireframe_mvp_matrix_uniform = glGetUniformLocation(n_wireframe_program, "t_modelview_projection_matrix");
-	
+	n_wireframe_mvp_matrix_uniform = glGetUniformLocation(n_wireframe_program, "t_modelview_matrix");
+	n_wireframe_projection_matrix_uniform = glGetUniformLocation(n_wireframe_program, "t_projection_matrix");
 
 	// ziskat slinkovany a zkontrolovany program (vertex + fragment shader) pro pohled z patche
 	n_patch_program_object = Shaders::getPatchViewProgram();	
@@ -1541,12 +1541,30 @@ void OnIdle(CGL30Driver &driver)
 	}
 
 	// vykresli scenu
-	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	//DrawScene(); 	
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	DrawScene(); 	
 	
 	// vykresli wireframe
-	glUseProgram(n_wireframe_program);
-	//glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+	glUseProgram(n_wireframe_program);	
+	{
+		// matice perspektivni projekce
+		Matrix4f t_projection;
+		CGLTransform::Perspective(t_projection, 90, float(n_width) / n_height, .01f, 1000);		
+		
+		// modelview
+		Matrix4f t_modelview;
+		t_modelview.Identity();				
+
+		// vynasobit pohledem uzivatelske kamery
+		t_modelview *= cam.GetMatrix();
+
+		// matice pohledu kamery
+		//t_mvp = t_projection * t_modelview;
+		
+		glUniformMatrix4fv(n_wireframe_mvp_matrix_uniform, 1, GL_FALSE, &t_modelview[0][0]);
+		glUniformMatrix4fv(n_wireframe_projection_matrix_uniform, 1, GL_FALSE, &t_projection[0][0]);
+	}	
+	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 	DrawScene();
 	
 

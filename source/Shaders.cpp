@@ -376,13 +376,16 @@ GLuint Shaders::getWireframeProgram() {
 		"in vec3 v_pos;\n" // atributy - vstup z dat vrcholu
 		"in vec3 v_col;\n" // barva vrcholu
 		"\n"
-		"uniform mat4 t_modelview_projection_matrix;\n" // parametr shaderu - transformacni matice
+		"uniform mat4 t_modelview_matrix;\n" // parametr shaderu - transformacni matice
+		"uniform mat4 t_projection_matrix;\n" // parametr shaderu - transformacni matice
 		"\n"
 		"out vec3 v_color;\n"		
 		"\n"
 		"void main()\n"
 		"{\n"
-		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
+		"    vec4 v = t_modelview_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
+		"    v.xyz = v.xyz * 0.99;\n"
+		"    gl_Position = t_projection_matrix * v;\n"
 		"    v_color = v_col;\n"
 		"}\n";
 
