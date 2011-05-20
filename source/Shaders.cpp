@@ -161,7 +161,7 @@ GLuint Shaders::getPreviewProgram() {
 		"\n"
 		"void main()\n"
 		"{\n"			
-		/*
+		
 		"    vec4 tex_color = vec4(0.0);"
 		"    if(v_texcoord.y >= 0.25 && v_texcoord.y <= 0.75) {"
 		"        if(v_texcoord.x < 0.25)"
@@ -175,8 +175,8 @@ GLuint Shaders::getPreviewProgram() {
 		"    else if(v_texcoord.y > 0.75 && v_texcoord.x >= 0.25 && v_texcoord.x <= 0.75)"
 		"        tex_color = texture(n_tex, (v_texcoord + vec2(-0.25, -.75)) * vec2(0.5/0.5, 0.33333/0.25) + vec2(0.0, 0.66667));"
 		"    else discard;"	
-		*/
-		"    vec4 tex_color = texture(n_tex, v_texcoord);\n"
+		
+		//"    vec4 tex_color = texture(n_tex, v_texcoord);\n"
 		/*		
 		"    vec4 tex_color = texture(n_tex, v_texcoord) * .5;//vec4(0.0);\n" // precte texturu krabice
 		"    float f_tex_length = length(v_normal_tex);\n"
@@ -318,7 +318,7 @@ GLuint Shaders::getUserViewProgram() {
 		"void main()\n"
 		"{\n"
 		"    gl_Position = t_modelview_projection_matrix * vec4(v_pos, 1.0);\n" // musime zapsat pozici
-		"    v_color = v_col;\n"
+		"    v_color = v_col / 1024;\n"
 		"}\n";
 
 
@@ -398,7 +398,7 @@ GLuint Shaders::getWireframeProgram() {
 		"\n"
 		"void main()\n"
 		"{\n"
-		"    frag_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);\n"
+		"    frag_color = vec4(0.0f, 0.0f, 0.0f, 0.0f);\n"
 		"}\n";
 
 

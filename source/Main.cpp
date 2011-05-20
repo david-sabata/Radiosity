@@ -53,7 +53,7 @@ bool InitGLObjects() {
 		float* colorData = new float[indCnt * 3]; // kazdy vrchol ma 3 barevne slozky
 		for (unsigned int i = 0; i < indCnt * 3; i += 3) {
 			//colorData[i] = Colors::packColor( patches[i/4]->illumination * patches[i/4]->getColor() ); // vychozi illuminance patchu (maji jen svetla)
-			Vector3f col = (patches[i/12]->illumination + Vector3f(0.8f, 0.8f, 0.8f)) * patches[i/12]->getColor();
+			Vector3f col = patches[i/12]->illumination * patches[i/12]->getColor();
 			colorData[i] = col.x;
 			colorData[i+1] = col.y;
 			colorData[i+2] = col.z;
@@ -1425,15 +1425,19 @@ void OnIdle(CGL30Driver &driver)
 
 			MARK("emitters update");
 
-			passCounter++;			
+			passCounter++;	
+
+			computeRadiosity = false;
 
 		} // for 'shoot' times
 
+		/*
 		if (moveLight) {
 			if(!computeRadiosity)
 				computeRadiosity = true;
 			// hack - compute radiosity in the next frame as well
 		}		
+		*/
 
 		// uvolnit fbo
 		fbo->Bind_ColorTexture2D(0, GL_TEXTURE_2D, 0);
@@ -1541,10 +1545,11 @@ void OnIdle(CGL30Driver &driver)
 	}
 
 	// vykresli scenu
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	DrawScene(); 	
 	
-	// vykresli wireframe
+	// vykresli wireframe pres jiz vykresleny obraz
+	/*
 	glUseProgram(n_wireframe_program);	
 	{
 		// matice perspektivni projekce
@@ -1566,7 +1571,7 @@ void OnIdle(CGL30Driver &driver)
 	}	
 	glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 	DrawScene();
-	
+	*/
 
 	if (showPatchLook) {
 		// pouzije shader pro nahledovy kriz
